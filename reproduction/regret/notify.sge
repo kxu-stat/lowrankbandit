@@ -1,0 +1,15 @@
+#!/bin/bash
+# notify.sge: runs after an array has finished (submitted with -hold_jid).  With the lines #$ -M <address> and
+# #$ -m e the scheduler's mail is the signal that the array is over; the cell counts
+# printed below land beside this file, as regret_done.o<jobid>, which is what to read.
+#$ -pe smp 1
+#$ -q long
+#$ -N regret_done
+
+cd $SGE_O_WORKDIR
+echo "Array finished at $(date)."
+echo "cells written per directory:"
+find . -path '*/cells/*.json' | cut -d/ -f2 | sort | uniq -c
+echo "cells with an error per directory:"
+grep -l '"status": "error"' */cells/*.json 2>/dev/null | cut -d/ -f1 | sort | uniq -c
+echo "Next: python3 collect_regret.py FAMILY (gaussian or binomial; debug runs: the options in submit_debug_*.sge)"

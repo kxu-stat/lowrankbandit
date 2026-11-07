@@ -1,0 +1,15 @@
+#!/bin/bash
+# DEBUG pass of the tier approx (the truths s_j ~ j^-2, j^-1.5), binary rewards, sphere, horizon
+# 2000, 1 replication: 14 cells (7 arms per truth), one per task.  Checks the pipeline; no claim.
+# Then:  python3 collect_regret.py binomial --tiers approx --designs sphere --horizon 2000 --replications 1 --out debug_binomial_approx
+#        python3 verdict_regret.py --out debug_binomial_approx debug_binomial_approx
+#$ -pe smp 1
+#$ -q long
+#$ -N debug_b_approx
+#$ -t 1-14
+#$ -tc 110
+#$ -r n
+
+module load python/3.12.15
+cd $SGE_O_WORKDIR
+python3 run_regret.py binomial --tiers approx --designs sphere --horizon 2000 --replications 1 --out debug_binomial_approx --chunk $SGE_TASK_ID --chunks 14

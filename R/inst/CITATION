@@ -1,0 +1,11 @@
+bibentry(
+  bibtype = "Unpublished",
+  title = "Regret Minimization and Statistical Inference for Low-Rank Contextual Generalized Linear Bandits, with Applications to Advertising and Product Design",
+  author = c(
+    person("Ke", "Xu"),
+    person("Yuefeng", "Han"),
+    person("Zifeng", "Zhao")
+  ),
+  year = "2026",
+  note = "Manuscript"
+)

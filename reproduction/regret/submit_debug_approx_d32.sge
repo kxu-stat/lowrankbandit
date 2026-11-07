@@ -1,0 +1,17 @@
+#!/bin/bash
+# DEBUG pass of the tiers approx (the truths s_j ~ j^-2, j^-1.5) and d32, Gaussian rewards, sphere,
+# rho = 0.5, horizon 2000, 1 replication: approx 24 cells (12 arms per truth) and d32 13 (ESTR k = 4 at r = 4 has
+# T1 = 2400 >= 2000) -- ONE task list of the two tiers (37 cells); the binary approx cells are in
+# submit_debug_approx_binomial.sge.  Checks the pipeline; no claim.
+# Then:  python3 collect_regret.py gaussian --tiers approx,d32 --designs sphere --levels 0.5 --horizon 2000 --replications 1 --out debug_gaussian_ef
+#        python3 verdict_regret.py --out debug_gaussian_ef debug_gaussian_ef
+#$ -pe smp 1
+#$ -q long
+#$ -N debug_e_f
+#$ -t 1-37
+#$ -tc 110
+#$ -r n
+
+module load python/3.12.15
+cd $SGE_O_WORKDIR
+python3 run_regret.py gaussian --tiers approx,d32 --designs sphere --levels 0.5 --horizon 2000 --replications 1 --out debug_gaussian_ef --chunk $SGE_TASK_ID --chunks 37

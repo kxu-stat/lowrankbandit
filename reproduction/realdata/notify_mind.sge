@@ -1,0 +1,17 @@
+#!/bin/bash
+# notify_mind.sge: runs after an array has finished (submitted with -hold_jid).  With the lines #$ -M <address>
+# and #$ -m e the scheduler's mail is the signal that the array is over; the cell counts
+# printed below land beside this file, as mind_done.o<jobid>, which is what to read.
+#$ -pe smp 1
+#$ -q long
+#$ -N mind_done
+
+cd $SGE_O_WORKDIR
+echo "Array finished at $(date)."
+echo "cells written per directory:"
+find . -path '*/cells/*.json' | cut -d/ -f2 | sort | uniq -c
+echo "cells with an error per directory:"
+grep -l '"status": "error"' */cells/*.json 2>/dev/null | cut -d/ -f1 | sort | uniq -c
+echo "Next: python3 collect_mind.py DIR --setup data/mind_setup_D16.npz (debug: --horizon 2000 --replications 2;"
+echo "  the main world: --block main --best mind_regret/collected/best.tsv, debug: debug_mind/collected/best.tsv)"
+echo "  or, after the inference: python3 collect_mind_inference.py PHASE --setup data/mind_setup_D16.npz"

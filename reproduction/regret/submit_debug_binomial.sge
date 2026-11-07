@@ -1,0 +1,16 @@
+#!/bin/bash
+# DEBUG pass, binary rewards: the cheapest main case (sphere, d = 16, r = 1, nb = 1) at horizon 2000, 3 replications,
+# every arm (also the GLM and 2y - 1 baselines): 63 cells, one per task (up to about two minutes each).  Checks the
+# pipeline; no statistical claim.
+# Then: python3 collect_regret.py binomial --tiers debug --designs sphere --horizon 2000 --replications 3 --out debug_binomial
+#       python3 verdict_regret.py debug_binomial
+#$ -pe smp 1
+#$ -q long
+#$ -N debug_binomial
+#$ -t 1-63
+#$ -tc 110
+#$ -r n
+
+module load python/3.12.15
+cd $SGE_O_WORKDIR
+python3 run_regret.py binomial --tiers debug --designs sphere --horizon 2000 --replications 3 --out debug_binomial --chunk $SGE_TASK_ID --chunks 63

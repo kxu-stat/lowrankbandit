@@ -1,0 +1,20 @@
+#!/bin/bash
+# MIND regret study, the main world (the appendix; reported, no
+# prediction): 80,000 rounds drawn with replacement (twice the down-sampled world's 40,000), 50
+# streams x 5 arms = 250 cells, one per task (up to about 16 hours: logistic OFUL and GLM-ESTR at 80,000 rounds):
+# ours (A_t2), the two-track collection, logistic OFUL and GLM-ESTR at the configuration with the
+# smallest mean regret in the down-sampled world, and the auxiliary-covariate greedy over its tau grid.  Submit only
+# after the down-sampled array is collected: the configurations are read from mind_regret/collected/best.tsv.  Seeds
+# as submit_mind.sge.
+# Submit:  JOBID=$(qsub -terse submit_mind_main.sge | cut -d. -f1); qsub -hold_jid $JOBID notify_mind.sge
+# Then:    python3 collect_mind.py mind_regret_main --setup data/mind_setup_D16.npz --block main --best mind_regret/collected/best.tsv
+#$ -pe smp 1
+#$ -q long
+#$ -N mind_regret_main
+#$ -t 1-250
+#$ -tc 110
+#$ -r n
+
+module load python/3.12.15
+cd $SGE_O_WORKDIR
+python3 run_mind.py --setup data/mind_setup_D16.npz --block main --best mind_regret/collected/best.tsv --out mind_regret_main --chunk $SGE_TASK_ID --chunks 250

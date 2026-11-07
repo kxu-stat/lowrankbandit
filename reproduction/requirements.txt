@@ -1,0 +1,7 @@
+# The four packages the experiments use.  The versions on the right are the ones
+# the reference numbers in selftest_reference.json were produced with; `pip install
+# -r requirements.txt` takes the newest compatible release and `python3 selftest.py`
+# then checks that it computes the same numbers.  Pin with == to reproduce exactly.
+numpy>=2.0        # 2.4.4
+scipy>=1.11       # 1.17.1
+matplotlib>=3.8   # 3.10.9   (figures only; the experiments do not import it)

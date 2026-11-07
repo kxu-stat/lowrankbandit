@@ -1,0 +1,93 @@
+site_name: lowrankbandit
+site_description: Greedy low-rank contextual GLM bandits and confidence intervals after adaptive data collection, in Python and R
+site_url: https://kxu-stat.github.io/lowrankbandit/
+repo_url: https://github.com/kxu-stat/lowrankbandit
+repo_name: kxu-stat/lowrankbandit
+copyright: Copyright &copy; 2026 Ke Xu, Yuefeng Han and Zifeng Zhao
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - How it works: how-it-works.md
+  - Settings: settings.md
+  - Reference:
+      - Python: reference/python.md
+      - R: https://kxu-stat.github.io/lowrankbandit/R/reference/
+  - Reproducing the paper: reproducing.md
+  - Citation: citation.md
+
+theme:
+  name: material
+  icon:
+    logo: material/chart-bell-curve-cumulative
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - content.code.copy
+    - content.tabs.link
+    - toc.follow
+
+exclude_docs: |
+  requirements.txt
+  animations/*.tex
+  animations/*.py
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [python/src]
+          options:
+            docstring_style: numpy
+            show_source: false
+            show_bases: false
+            show_root_heading: true
+            show_root_full_path: false
+            show_signature_annotations: false
+            separate_signature: true
+            merge_init_into_class: true
+            members_order: source
+            inherited_members: true
+            filters: ["!^_"]
+            heading_level: 2

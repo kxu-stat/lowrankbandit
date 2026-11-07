@@ -1,0 +1,39 @@
+% Shared by both animations (two_track_animation.tex, greedy_flow_animation.tex):
+% the highlight color, the helpers drawn on top of a figure, and the caption bar.
+\definecolor{nowred}{HTML}{C62828}
+\definecolor{chipgray}{HTML}{4B525A}
+\definecolor{chipteal}{HTML}{267A78}
+\pgfdeclarelayer{background}
+\pgfsetlayers{background,main}
+\tikzset{
+  now/.style={draw=nowred,line width=1.3pt,rounded corners=1.5pt},
+  usedbar/.style={draw=nowred!60,line width=2pt},
+  veil/.style={fill=white,opacity=0.65},
+  rednote/.style={text=nowred,font=\scriptsize}
+}
+
+% red frame around a node (#1), around its top or bottom half, around a group of nodes (#1 to #2)
+\newcommand{\frameall}[1]{\draw[now] ([shift={(-1.2pt,-1.2pt)}]#1.south west) rectangle ([shift={(1.2pt,1.2pt)}]#1.north east);}
+\newcommand{\frametop}[1]{\draw[now] ([shift={(-1.2pt,0pt)}]#1.west) rectangle ([shift={(1.2pt,1.2pt)}]#1.north east);}
+\newcommand{\framebottom}[1]{\draw[now] ([shift={(-1.2pt,-1.2pt)}]#1.south west) rectangle ([shift={(1.2pt,0pt)}]#1.east);}
+\newcommand{\framegroup}[2]{\draw[now] ([shift={(-2.5pt,-2.5pt)}]#1.south west) rectangle ([shift={(2.5pt,2.5pt)}]#2.north east);}
+% red frame around a card of the Algorithm 1 figure (larger rounded corners)
+\newcommand{\framecard}[1]{\draw[draw=nowred,line width=1.4pt,rounded corners=3pt]
+  ([shift={(-2pt,-2pt)}]#1.south west) rectangle ([shift={(2pt,2pt)}]#1.north east);}
+% white veil over a node: the part not used at that moment
+\newcommand{\veilnode}[1]{\fill[veil] ([shift={(-2pt,-2pt)}]#1.south west) rectangle ([shift={(2pt,2pt)}]#1.north east);}
+% red bar under a node: data used by the step in red
+\newcommand{\usedbar}[1]{\draw[usedbar] ([shift={(1pt,-3pt)}]#1.south west) -- ([shift={(-1pt,-3pt)}]#1.south east);}
+% light band behind the panel being built, from height #1 to height #2
+\newcommand{\panelband}[2]{\begin{pgfonlayer}{background}
+  \fill[black!3,rounded corners=4pt] (-0.12,#1) rectangle (16.12,#2);\end{pgfonlayer}}
+
+% caption bar under the figure: #1 chip color, #2 chip text, #3 caption (two lines at most)
+\newcommand{\captionbar}[3]{%
+  \begin{tikzpicture}
+    \path[use as bounding box] (0,0) rectangle (16.2,1.45);
+    \fill[black!4,rounded corners=3pt] (0,0) rectangle (16.2,1.45);
+    \node[fill=#1,text=white,font=\footnotesize\bfseries,rounded corners=2pt,
+      minimum width=1.6cm,minimum height=.56cm,inner sep=2pt] at (1.0,.725) {#2};
+    \node[anchor=west,text width=13.9cm,align=left,font=\small,text=black!85] at (2.0,.725) {#3};
+  \end{tikzpicture}}

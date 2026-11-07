@@ -1,0 +1,16 @@
+#!/bin/bash
+# DEBUG pass of the tier scale: sphere (16, 2), rho = 0.5, horizons 1,000 and 2,000, 2 replications,
+# A_t2, OFUL and ESTR at its five T1: 28 cells, one per task (under a minute each).  They are cells of the tier scale
+# (same keys and seeds).  Checks the pipeline; makes no statistical claim.
+# Then: python3 collect_regret.py gaussian --tiers scale_debug --designs sphere --replications 2 --out debug_scale
+#       python3 verdict_regret.py debug_scale --out debug_scale_verdict
+#$ -pe smp 1
+#$ -q long
+#$ -N debug_scale
+#$ -t 1-28
+#$ -tc 110
+#$ -r n
+
+module load python/3.12.15
+cd $SGE_O_WORKDIR
+python3 run_regret.py gaussian --tiers scale_debug --designs sphere --replications 2 --out debug_scale --chunk $SGE_TASK_ID --chunks 28

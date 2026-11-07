@@ -1,0 +1,16 @@
+#!/bin/bash
+# DEBUG pass of the MIND regret study (the down-sampled world): horizon 2,000, 2 streams, all 23 arms
+# (ESTR's largest T1 at rank 2 is 1,050): 46 cells, one per task, a few minutes each; streams 1-2 of the seeds,
+# 20,261,001-003 and 20,261,011-013.  Checks the pipeline; no claim.
+# Then:  python3 collect_mind.py debug_mind --setup data/mind_setup_D16.npz --horizon 2000 --replications 2
+#        (its collected/best.tsv feeds the main world's debug pass, submit_debug_mind_main.sge)
+#$ -pe smp 1
+#$ -q long
+#$ -N debug_mind
+#$ -t 1-46
+#$ -tc 110
+#$ -r n
+
+module load python/3.12.15
+cd $SGE_O_WORKDIR
+python3 run_mind.py --setup data/mind_setup_D16.npz --horizon 2000 --replications 2 --out debug_mind --chunk $SGE_TASK_ID --chunks 46

@@ -1,0 +1,13 @@
+#!/bin/bash
+# notify.sge: runs after the array has finished (submitted with -hold_jid).  With the lines #$ -M <address> and
+# #$ -m e the scheduler's mail is the signal that the array is over; the part counts
+# printed below land beside this file, as inference_done.o<jobid>, to read.
+#$ -pe smp 1
+#$ -q long
+#$ -N inference_done
+
+cd $SGE_O_WORKDIR
+echo "Array finished at $(date)."
+echo "part files per directory:"
+find . -path '*/parts/*.tsv' | cut -d/ -f2 | sort | uniq -c
+echo "Next: python3 collect_inference.py [--debug]"

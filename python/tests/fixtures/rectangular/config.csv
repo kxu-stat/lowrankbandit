@@ -1,0 +1,2 @@
+family,main_effects,n,tau,c_lam,d1,d2,r,K
+gaussian,1,600,8,cv,5,3,1,5

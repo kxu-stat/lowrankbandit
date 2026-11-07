@@ -1,0 +1,19 @@
+#!/bin/bash
+# Regret study, tier approx: two approximately low-rank truths, singular values
+# s_j ~ j^-2 and j^-1.5 (the Schatten-q profiles of q = 1/2 and 2/3; simulation.truth), d = 16, K = 16, sphere and
+# normal, rho = 0.2, 0.5, 1: 12 cases x 50 replications x 12 arms (A_t2, OFUL, ESTR given rank 2 and rank 4 at its
+# five T1) = 7,200 cells, 6 per array task (about 90-120 CPU-h in all).
+# Submit:  JOBID=$(qsub -terse submit_gaussian_approx.sge | cut -d. -f1); qsub -hold_jid $JOBID notify.sge
+# Then:    python3 collect_regret.py gaussian --tiers approx --out regret_gaussian_approx;
+#          python3 verdict_regret.py --out verdict_approx regret_gaussian_approx regret_binomial_approx (after the binary array);
+#          python3 figures_regret.py regret_gaussian_approx
+#$ -pe smp 1
+#$ -q long
+#$ -N regret_g_approx
+#$ -t 1-1200
+#$ -tc 110
+#$ -r n
+
+module load python/3.12.15
+cd $SGE_O_WORKDIR
+python3 run_regret.py gaussian --tiers approx --out regret_gaussian_approx --chunk $SGE_TASK_ID --chunks 1200

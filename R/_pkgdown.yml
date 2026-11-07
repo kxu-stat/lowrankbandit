@@ -1,0 +1,40 @@
+url: https://kxu-stat.github.io/lowrankbandit/R/
+
+template:
+  bootstrap: 5
+  bootswatch: flatly
+
+navbar:
+  structure:
+    left: [home, reference, news]
+    right: [docs, github]
+  components:
+    docs:
+      text: Documentation
+      href: https://kxu-stat.github.io/lowrankbandit/
+    github:
+      icon: fa-github
+      href: https://github.com/kxu-stat/lowrankbandit
+      aria-label: GitHub
+
+reference:
+  - title: Policies
+    desc: Algorithm 1 and the data collection of Algorithm 2.
+    contents:
+      - greedy_policy
+      - two_track_policy
+  - title: Inference
+    desc: Steps 2-4 of Algorithm 2, and the loadings of targets.
+    contents:
+      - two_track_inference
+      - interaction_loading
+      - vec
+  - title: Estimation
+    contents:
+      - fit_nuclear
+  - title: Simulated data
+    contents:
+      - simulate_stream
+      - stream
+      - run
+      - low_rank_truth

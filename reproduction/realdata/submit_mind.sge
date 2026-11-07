@@ -1,0 +1,21 @@
+#!/bin/bash
+# MIND regret study, the down-sampled world (the main text): the
+# click model of the inference's main text (every log-odds plus log 4; every constant the methods are given recomputed
+# from its truth, the setup file's w4_* keys), 40,000 rounds drawn with replacement, 50 streams x 23 arms (with the
+# two-track collection of the inference, arm two_track, prediction M6) = 1,150 cells, one per task (minutes to about
+# 22 hours: an OFUL or GLM-ESTR cell holds 5 configurations); seeds 20,261,001 on.
+# Needs data/mind_small_prepared_glove.npz and data/mind_setup_D16.npz.
+# Submit:  JOBID=$(qsub -terse submit_mind.sge | cut -d. -f1); qsub -hold_jid $JOBID notify_mind.sge
+# Resubmitting finishes an interrupted run (a finished cell is skipped).
+# Then:    python3 collect_mind.py mind_regret --setup data/mind_setup_D16.npz;  python3 figures_mind.py
+#          (its collected/best.tsv fixes the competitors' configurations of the main world, submit_mind_main.sge)
+#$ -pe smp 1
+#$ -q long
+#$ -N mind_regret
+#$ -t 1-1150
+#$ -tc 110
+#$ -r n
+
+module load python/3.12.15
+cd $SGE_O_WORKDIR
+python3 run_mind.py --setup data/mind_setup_D16.npz --out mind_regret --chunk $SGE_TASK_ID --chunks 1150

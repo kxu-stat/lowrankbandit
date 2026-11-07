@@ -1,0 +1,15 @@
+#!/bin/bash
+# DEBUG pass of the inference experiment: I1, I2l, I1d32 (both covariate laws) and I3 on 1-4 replicates
+# and short grids; 7 tasks, minutes each (I1d32 about 5 minutes; C_ref = 1/15).  Exercises every code path and writes
+# the records (inference_debug/records, 24 files); no claim.
+# Then:  python3 collect_inference.py --debug;  python3 replay_inference.py inference_debug --rows
+#$ -pe smp 1
+#$ -q long
+#$ -N debug_inference
+#$ -t 1-7
+#$ -tc 110
+#$ -r n
+
+module load python/3.12.15
+cd $SGE_O_WORKDIR
+python3 run_inference.py --debug --chunk $SGE_TASK_ID --chunks 7

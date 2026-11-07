@@ -1,0 +1,34 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the paper below."
+title: "lowrankbandit: greedy low-rank contextual GLM bandits and two-track inference"
+type: software
+authors:
+  - family-names: Xu
+    given-names: Ke
+    email: kxu6@nd.edu
+  - family-names: Han
+    given-names: Yuefeng
+  - family-names: Zhao
+    given-names: Zifeng
+version: 0.1.0
+license: MIT
+repository-code: "https://github.com/kxu-stat/lowrankbandit"
+url: "https://kxu-stat.github.io/lowrankbandit/"
+keywords:
+  - contextual bandits
+  - low-rank matrix estimation
+  - generalized linear models
+  - statistical inference
+  - adaptive data collection
+preferred-citation:
+  type: unpublished
+  title: "Regret Minimization and Statistical Inference for Low-Rank Contextual Generalized Linear Bandits, with Applications to Advertising and Product Design"
+  authors:
+    - family-names: Xu
+      given-names: Ke
+    - family-names: Han
+      given-names: Yuefeng
+    - family-names: Zhao
+      given-names: Zifeng
+  year: 2026
+  notes: "Manuscript"

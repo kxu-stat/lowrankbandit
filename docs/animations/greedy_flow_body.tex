@@ -1,0 +1,105 @@
+% The figure of Algorithm 1: the process in words; symbols only to name the objects of the loop, no formulas.
+% Drawing commands only: \input this file inside \begin{tikzpicture} ... \end{tikzpicture}.
+% Colors and the user / ad / display icons are those of the paper's figure.
+\definecolor{adinteraction}{HTML}{68558A}
+\definecolor{adgreedy}{HTML}{267A78}
+\definecolor{adink}{HTML}{39434D}
+\definecolor{adfeedback}{HTML}{B77D38}
+\tikzset{
+  x=1cm,y=1cm,line cap=round,line join=round,
+  card/.style={draw=adink!45,fill=white,rounded corners=3pt,line width=.65pt,
+    align=center,inner sep=4pt},
+  modelcard/.style={card,draw=adinteraction!85,fill=adinteraction!5},
+  explorecard/.style={card,draw=adink!55,fill=black!6},
+  greedycard/.style={card,draw=adgreedy!90,fill=adgreedy!6},
+  rewardcard/.style={card,draw=adfeedback!85,fill=adfeedback!7},
+  flow/.style={-{Latex[length=1.9mm,width=1.1mm]},draw=adink!72,line width=.75pt},
+  note/.style={font=\scriptsize,align=center,text=adink},
+  title/.style={font=\small\bfseries,text=adink},
+  cell/.style={draw=adink!45,line width=.4pt,rounded corners=.6pt,
+    minimum width=.27cm,minimum height=.30cm,inner sep=0pt},
+  excell/.style={cell,fill=black!10},
+  grcell/.style={cell,draw=adgreedy!80,fill=adgreedy!18}
+}
+\path[use as bounding box] (-.12,-.12) rectangle (16.12,6.52);
+
+% ---------------------------------------------------------------- phases of the horizon
+\fill[black!6] (0,5.62) rectangle (4,6.08);
+\fill[adgreedy!9] (4,5.62) rectangle (16,6.08);
+\draw[adink!45,line width=.5pt,rounded corners=2pt] (0,5.62) rectangle (16,6.08);
+\draw[adink!45,line width=.5pt] (4,5.62) -- (4,6.08);
+\node[note] at (2,5.85) {\textbf{Explore}\quad rounds \(1,\ldots,\tau\)};
+\node[note,text=adgreedy!85!black] at (10,5.85)
+  {\textbf{Greedy}\quad rounds \(\tau+1,\ldots,n\)};
+
+% ---------------------------------------------------------------- round t: observe
+\node[card,minimum width=3.2cm,minimum height=2.3cm] (observe) at (1.5,3.6) {};
+\node[title] at (1.5,4.45) {Observe};
+\begin{scope}[shift={(.60,3.88)}]          % user icon
+  \draw[draw=adink!65,fill=adink!6](0,.16) circle(.13);
+  \draw[draw=adink!65,fill=adink!6](-.24,-.28)
+    .. controls(-.22,.0) and(.22,.0)..(.24,-.28)--cycle;
+\end{scope}
+\node[note,anchor=west] at (.95,3.85) {user \(x_t\)};
+\begin{scope}[shift={(.28,2.88)}]          % candidate ads
+  \foreach \x/\y in {0/0,.18/.09,.36/.18}{
+    \draw[rounded corners=1pt,draw=adink!60,fill=white](\x,\y) rectangle ++(.32,.38);
+    \draw[adink!25,line width=1.2pt](\x+.06,\y+.27)--++(.20,0);
+    \draw[adink!45,line width=.4pt](\x+.06,\y+.13)--++(.20,0);}
+\end{scope}
+\node[note,anchor=west,align=left] at (.95,3.08) {candidate ads\\\(m_{t,1},\ldots,m_{t,K}\)};
+
+% ---------------------------------------------------------------- fitted linear predictors
+\node[modelcard,minimum width=4.6cm,minimum height=2.3cm] (score) at (5.85,3.6) {};
+\node[title,text=adinteraction] at (5.85,4.45) {Score each ad};
+\node[text=adinteraction] at (5.85,3.92)
+  {\(\hat u_{t,a}\) from the latest fit \(\hat\theta_{t-1}\)};
+\node[note,text=adinteraction] at (5.85,3.48) {ad effect + user effect};
+\node[note,text=adinteraction] at (5.85,3.16) {+ low-rank user--ad interaction};
+% low-rank interaction: thin factors
+\begin{scope}[shift={(5.42,2.60)}]
+  \fill[adinteraction!45] (0,0) rectangle ++(.12,.34);
+  \fill[adinteraction!70] (.20,.22) rectangle ++(.12,.12);
+  \fill[adinteraction!45] (.40,.22) rectangle ++(.46,.12);
+\end{scope}
+
+% ---------------------------------------------------------------- selection: two phases
+\node[explorecard,minimum width=3.0cm,minimum height=1.0cm] (explore) at (10.35,4.15)
+  {\textbf{Explore}, \(t\le\tau\)\\[-1pt]\footnotesize ad drawn at random};
+\node[greedycard,minimum width=3.0cm,minimum height=1.0cm] (greedy) at (10.35,3.0)
+  {\textbf{Greedy}, \(t>\tau\)\\[-1pt]\footnotesize ad with largest \(\hat u_{t,a}\)};
+
+% ---------------------------------------------------------------- display
+\node[card,minimum width=3.0cm,minimum height=2.3cm] (display) at (14.5,3.6) {};
+\begin{scope}[shift={(14.5,3.78)}]          % display icon
+  \draw[rounded corners=2pt,draw=adink!65,fill=adink!2](-.85,-.43) rectangle(.85,.63);
+  \draw[rounded corners=1pt,draw=adfeedback!65,fill=adfeedback!13](-.66,-.20) rectangle(.66,.42);
+  \node[note] at (0,.11) {ad \(a_t\)};
+\end{scope}
+\node[title] at (14.5,2.88) {Display \(a_t\)};
+
+% ---------------------------------------------------------------- feedback row
+\node[rewardcard,minimum width=3.0cm,minimum height=1.05cm] (reward) at (14.5,1.0)
+  {Click / no click \(y_t\)};
+\node[card,minimum width=3.0cm,minimum height=1.05cm] (record) at (10.35,1.0) {};
+\node[note,font=\footnotesize] at (10.35,1.27) {add to the data};
+\foreach \k in {0,1,2} {\node[excell] (rc\k) at (9.18+.31*\k,.78) {};}
+\foreach \k in {3,4,5,6,7} {\node[grcell] (rc\k) at (9.24+.31*\k,.78) {};}
+\node[modelcard,minimum width=4.6cm,minimum height=1.45cm] (refit) at (5.85,1.0)
+  {\textbf{\textcolor{adinteraction}{Refit}} \(\hat\theta_t\)\\[1pt]
+   \footnotesize nuclear-norm-penalized GLM fit\\
+   \footnotesize on all data so far, from \(t=\tau\) on};
+
+% ---------------------------------------------------------------- arrows
+\draw[flow] (observe.east) -- (score.west);
+\draw[flow,draw=adgreedy] (score.east) -- ++(.42,0) |- (greedy.west);
+\draw[flow,draw=adink!60] (observe.north) -- (1.5,5.18) -- (10.35,5.18)
+  node[pos=.5,above=-1pt,note]{candidates only} -- (explore.north);
+\draw[flow,draw=adink!60] (explore.east) -- ++(.26,0) |- ([yshift=.25cm]display.west);
+\draw[flow,draw=adgreedy] (greedy.east) -- ++(.26,0) |- ([yshift=-.25cm]display.west);
+\draw[flow,draw=adfeedback] (display.south) -- node[right=2pt,note,align=left]
+  {revealed\\after \(a_t\)} (reward.north);
+\draw[flow] (reward.west) -- (record.east);
+\draw[flow] (record.west) -- (refit.east);
+\draw[flow,draw=adinteraction] (refit.north) -- node[right=2pt,note,text=adinteraction]
+  {\(\hat\theta_t\) used in round \(t+1\)} (score.south);

@@ -1,0 +1,15 @@
+#!/bin/bash
+# Regret study, Gaussian rewards: d = 16, 30 cases
+# (r = 1, 2, 4 at K = 16 and r = 2 at K = 32, 64; two designs; rho = 0.2, 0.5, 1) x 50 replications x 15 arms
+# = 22,500 cells, about 20 per array task.  Submit:  JOBID=$(qsub -terse submit_gaussian.sge | cut -d. -f1); qsub -hold_jid $JOBID notify.sge
+# Resubmitting finishes an interrupted run (a finished cell is skipped).  Then: python3 collect_regret.py gaussian
+#$ -pe smp 1
+#$ -q long
+#$ -N regret_gaussian
+#$ -t 1-1100
+#$ -tc 110
+#$ -r n
+
+module load python/3.12.15
+cd $SGE_O_WORKDIR
+python3 run_regret.py gaussian --chunk $SGE_TASK_ID --chunks 1100

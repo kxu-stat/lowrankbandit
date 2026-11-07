@@ -1,0 +1,19 @@
+#!/bin/bash
+# Regret against the horizon (tier scale): (16, 2), K = 16, both designs, rho = 0.5
+# and 1; horizons 1,000, 2,000, 5,000, 10,000, 20,000, 50,000 and 100,000, each a separate run tuned to its own n
+# (our tau 20-28, the penalty levels with log(n d1 d2); ESTR's lambda_perp with T2 = n - T1); A_t2, OFUL and ESTR at
+# its five T1 (5 multipliers each); 50 replications: 9,800 cells, about 9 per array task (under 1 GB; about 250-350
+# CPU-h).  The cells at n = 10,000 are the main grid's cells of the same case (same seeds).
+# Submit:  JOBID=$(qsub -terse submit_gaussian_scale.sge | cut -d. -f1); qsub -hold_jid $JOBID notify.sge
+# Resubmitting finishes an interrupted run (a finished cell is skipped).
+# Then: python3 collect_regret.py gaussian --tiers scale --out regret_gaussian_scale
+#$ -pe smp 1
+#$ -q long
+#$ -N regret_scale
+#$ -t 1-1100
+#$ -tc 110
+#$ -r n
+
+module load python/3.12.15
+cd $SGE_O_WORKDIR
+python3 run_regret.py gaussian --tiers scale --out regret_gaussian_scale --chunk $SGE_TASK_ID --chunks 1100

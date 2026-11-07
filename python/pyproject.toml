@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lowrankbandit"
+version = "0.1.0"
+description = "Greedy low-rank contextual GLM bandits and two-track inference for linear functionals"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    {name = "Ke Xu", email = "kxu6@nd.edu"},
+    {name = "Yuefeng Han"},
+    {name = "Zifeng Zhao"},
+]
+maintainers = [{name = "Ke Xu", email = "kxu6@nd.edu"}]
+keywords = ["contextual bandits", "low-rank", "generalized linear models", "statistical inference",
+            "nuclear norm", "adaptive data collection"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.9"
+dependencies = ["numpy>=1.22", "scipy>=1.8"]
+
+[project.urls]
+Homepage = "https://github.com/kxu-stat/lowrankbandit"
+Documentation = "https://kxu-stat.github.io/lowrankbandit/"
+Issues = "https://github.com/kxu-stat/lowrankbandit/issues"
+
+[project.optional-dependencies]
+test = ["pytest"]

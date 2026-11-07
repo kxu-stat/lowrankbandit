@@ -1,0 +1,24 @@
+Package: lowrankbandit
+Type: Package
+Title: Greedy Low-Rank Contextual GLM Bandits and Two-Track Inference
+Version: 0.1.0
+Authors@R: c(
+    person("Ke", "Xu", email = "kxu6@nd.edu", role = c("aut", "cre")),
+    person("Yuefeng", "Han", role = "aut"),
+    person("Zifeng", "Zhao", role = "aut")
+  )
+Description: Contextual bandits whose rewards follow a generalized linear model with a
+    low-rank interaction between the features of the arms and the context. The greedy policy
+    learns the interaction by nuclear-norm-penalized estimation, refitted every round after a
+    short exploration (Algorithm 1). Two-track cross-fitting then gives confidence intervals
+    for linear functionals of the parameter that are asymptotically valid although the data were
+    collected by greedy, non-randomized choices (Algorithm 2). The functions, arguments and
+    defaults are those of the Python package of the same name, which returns the same numbers on
+    the same rounds.
+License: MIT + file LICENSE
+URL: https://github.com/kxu-stat/lowrankbandit, https://kxu-stat.github.io/lowrankbandit/
+BugReports: https://github.com/kxu-stat/lowrankbandit/issues
+Depends: R (>= 4.0.0)
+Encoding: UTF-8
+Imports: stats
+RoxygenNote: 7.3.1

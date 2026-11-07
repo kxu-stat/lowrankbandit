@@ -1,0 +1,15 @@
+#!/bin/bash
+# DEBUG pass of the MIND regret study's main world: horizon 2,000, 2 streams, 5 arms, the competitors'
+# configurations read from the down-sampled world's debug collect (debug_mind/collected/best.tsv): 10 cells, a few
+# minutes each.  Checks the pipeline; no claim.  Submit after collect_mind.py debug_mind.
+# Then:  python3 collect_mind.py debug_mind_main --setup data/mind_setup_D16.npz --block main --best debug_mind/collected/best.tsv --horizon 2000 --replications 2
+#$ -pe smp 1
+#$ -q long
+#$ -N debug_mind_main
+#$ -t 1-10
+#$ -tc 110
+#$ -r n
+
+module load python/3.12.15
+cd $SGE_O_WORKDIR
+python3 run_mind.py --setup data/mind_setup_D16.npz --block main --best debug_mind/collected/best.tsv --horizon 2000 --replications 2 --out debug_mind_main --chunk $SGE_TASK_ID --chunks 10

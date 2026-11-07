@@ -1,0 +1,18 @@
+#!/bin/bash
+# Regret study, tier d32: d = 32 with r = 2 and 4 (d/r = 16, 8), K = 16, sphere and normal,
+# rho = 0.5: 4 cases x 50 replications x 7 arms (A_t2, OFUL, ESTR at its five T1) = 1,400 cells, one per array task
+# (up to about half an hour each; about 280-420 CPU-h in all).
+# Submit:  JOBID=$(qsub -terse submit_gaussian_d32.sge | cut -d. -f1); qsub -hold_jid $JOBID notify.sge
+# Then:    python3 collect_regret.py gaussian --tiers d32 --out regret_gaussian_d32;
+#          python3 verdict_regret.py --out verdict_d32 regret_gaussian_d32;
+#          python3 figures_regret.py regret_gaussian_d32
+#$ -pe smp 1
+#$ -q long
+#$ -N regret_g_d32
+#$ -t 1-1400
+#$ -tc 110
+#$ -r n
+
+module load python/3.12.15
+cd $SGE_O_WORKDIR
+python3 run_regret.py gaussian --tiers d32 --out regret_gaussian_d32 --chunk $SGE_TASK_ID --chunks 1400

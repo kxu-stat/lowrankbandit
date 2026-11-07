@@ -1,0 +1,123 @@
+% Animation of Algorithm 1 on its figure (greedy_flow_body.tex).
+%
+% Every overlay shows the whole figure (\input{greedy_flow_body}); the overlays only add, on top
+% (animation_style.tex): a red marker on the horizon strip for the current round t, red frames and red
+% copies of the arrows for the step being carried out, white veils over what is not used at that moment
+% and over record cells not yet added, and the caption bar.
+% Each overlay is one frame; build_animation.py sets how long each frame is shown.
+%
+%   overlay  1       overview
+%   overlays 2-9     exploration: round 1 step by step, rounds 2 and tau, the first fit
+%   overlays 10-17   greedy: round tau+1 step by step
+%   overlays 18-21   later rounds, round n, the complete figure
+\documentclass[11pt]{beamer}
+\usefonttheme{serif}
+\geometry{paperwidth=17.0cm,paperheight=9.0cm}
+\setbeamertemplate{navigation symbols}{}
+\setbeamersize{text margin left=0pt,text margin right=0pt}
+\usepackage{amsmath,amssymb}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,calc,positioning,decorations.pathreplacing}
+\input{animation_style}
+
+% the marker of the current round on the horizon strip
+\newcommand{\roundmarker}[2]{\fill[nowred] (#1,6.13) -- ++(-.11,.2) -- ++(.22,0) -- cycle;
+  \node[font=\scriptsize,text=nowred,anchor=south] at (#1,6.31) {#2};}
+% red copies of the arrows of the figure
+\tikzset{redflow/.style={-{Latex[length=2.2mm,width=1.4mm]},draw=nowred,line width=1.3pt}}
+\newcommand{\redObsScore}{\draw[redflow] (observe.east) -- (score.west);}
+\newcommand{\redObsExplore}{\draw[redflow] (observe.north) -- (1.5,5.18) -- (10.35,5.18) -- (explore.north);}
+\newcommand{\redScoreGreedy}{\draw[redflow] (score.east) -- ++(.42,0) |- (greedy.west);}
+\newcommand{\redExploreDisplay}{\draw[redflow] (explore.east) -- ++(.26,0) |- ([yshift=.25cm]display.west);}
+\newcommand{\redGreedyDisplay}{\draw[redflow] (greedy.east) -- ++(.26,0) |- ([yshift=-.25cm]display.west);}
+\newcommand{\redDisplayReward}{\draw[redflow] (display.south) -- (reward.north);}
+\newcommand{\redRewardRecord}{\draw[redflow] (reward.west) -- (record.east);}
+\newcommand{\redRecordRefit}{\draw[redflow] (record.west) -- (refit.east);}
+\newcommand{\redRefitScore}{\draw[redflow] (refit.north) -- (score.south);}
+% one whole round, exploration or greedy
+\newcommand{\exploreround}{\framecard{observe}\redObsExplore\framecard{explore}\redExploreDisplay
+  \framecard{display}\redDisplayReward\framecard{reward}\redRewardRecord\framecard{record}}
+\newcommand{\greedyround}{\framecard{observe}\redObsScore\framecard{score}\redScoreGreedy\framecard{greedy}
+  \redGreedyDisplay\framecard{display}\redDisplayReward\framecard{reward}\redRewardRecord\framecard{record}
+  \redRecordRefit\framecard{refit}\redRefitScore}
+
+\begin{document}
+\begin{frame}[plain,t]
+\vspace*{3mm}
+\centering
+\begin{tikzpicture}[font=\small]
+\input{greedy_flow_body}
+
+% parts not used: the scoring, greedy choice and refit during exploration; exploration afterward
+\only<2-8>{\veilnode{score}\veilnode{greedy}\veilnode{refit}}
+\only<9>{\veilnode{score}\veilnode{greedy}}
+\only<10-20>{\veilnode{explore}}
+% record cells not yet added (0-2: exploration rounds, 3-7: greedy rounds)
+\only<2-5>{\foreach \k in {0,...,7} {\veilnode{rc\k}}}
+\only<6>{\foreach \k in {1,...,7} {\veilnode{rc\k}}}
+\only<7>{\foreach \k in {2,...,7} {\veilnode{rc\k}}}
+\only<8-14>{\foreach \k in {3,...,7} {\veilnode{rc\k}}}
+\only<15-17>{\foreach \k in {4,...,7} {\veilnode{rc\k}}}
+\only<18>{\foreach \k in {5,...,7} {\veilnode{rc\k}}}
+\only<19>{\foreach \k in {6,7} {\veilnode{rc\k}}}
+
+% the current round
+\only<2-6>{\roundmarker{.4}{\(t=1\)}}
+\only<7>{\roundmarker{.9}{\(t=2\)}}
+\only<8-9>{\roundmarker{3.75}{\(t=\tau\)}}
+\only<10-17>{\roundmarker{4.3}{\(t=\tau+1\)}}
+\only<18>{\roundmarker{4.8}{\(t=\tau+2\)}}
+\only<19>{\roundmarker{5.3}{\(t=\tau+3\)}}
+\only<20>{\roundmarker{15.7}{\(t=n\)}}
+
+% exploration, round 1 step by step; rounds 2 and tau; the first fit
+\only<2>{\framecard{observe}}
+\only<3>{\redObsExplore\framecard{explore}}
+\only<4>{\redExploreDisplay\framecard{display}}
+\only<5>{\redDisplayReward\framecard{reward}}
+\only<6>{\redRewardRecord\framecard{record}}
+\only<7-8>{\exploreround}
+\only<9>{\redRecordRefit\framecard{refit}}
+
+% greedy, round tau+1 step by step
+\only<10>{\framecard{observe}}
+\only<11>{\redObsScore\redRefitScore\framecard{score}}
+\only<12>{\redScoreGreedy\framecard{greedy}}
+\only<13>{\redGreedyDisplay\framecard{display}}
+\only<14>{\redDisplayReward\framecard{reward}}
+\only<15>{\redRewardRecord\framecard{record}}
+\only<16>{\redRecordRefit\framecard{refit}}
+\only<17>{\redRefitScore\framecard{score}}
+\only<18-20>{\greedyround}
+\end{tikzpicture}
+
+\vspace{2mm}
+% caption bar (one per overlay)
+\only<1>{\captionbar{chipgray}{Overview}{Algorithm 1, the policy that collects the data: a short
+  exploration phase, then greedy choices from a refitted low-rank model.}}%
+\only<2>{\captionbar{chipgray}{Explore}{Round \(t\le\tau\): observe the user and the candidate ads.}}%
+\only<3>{\captionbar{chipgray}{Explore}{An ad is drawn at random; no fitted model is used.}}%
+\only<4-5>{\captionbar{chipgray}{Explore}{The ad \(a_t\) is displayed, and only this ad gives a
+  response: click or no click.}}%
+\only<6>{\captionbar{chipgray}{Explore}{The round is added to the data.}}%
+\only<7-8>{\captionbar{chipgray}{Explore}{Rounds \(2,\ldots,\tau\) do the same, each ad drawn
+  independently of the past.}}%
+\only<9>{\captionbar{chipgray}{Explore}{At \(t=\tau\), the first nuclear-norm-penalized fit is computed
+  from the exploration data.}}%
+\only<10>{\captionbar{chipteal}{Greedy}{Round \(t>\tau\): observe the user and the candidate ads.}}%
+\only<11>{\captionbar{chipteal}{Greedy}{Score each ad with the latest fit \(\hat\theta_{t-1}\): ad
+  effect, user effect and a low-rank user--ad interaction.}}%
+\only<12>{\captionbar{chipteal}{Greedy}{Show the ad with the largest score. The choice is made before
+  its response is seen.}}%
+\only<13-14>{\captionbar{chipteal}{Greedy}{Display \(a_t\) and observe click or no click.}}%
+\only<15-16>{\captionbar{chipteal}{Greedy}{Add the round to the data and refit the
+  nuclear-norm-penalized model on all data so far.}}%
+\only<17>{\captionbar{chipteal}{Greedy}{The new fit \(\hat\theta_t\) scores the ads in the next
+  round.}}%
+\only<18-19>{\captionbar{chipteal}{Greedy}{Every later round repeats the greedy loop; there is no
+  further exploration.}}%
+\only<20>{\captionbar{chipteal}{Greedy}{The loop runs until round \(n\).}}%
+\only<21>{\captionbar{chipgray}{Overview}{The exploration length \(\tau\) balances the accuracy of the
+  first fit against the clicks forgone while ads are drawn at random.}}%
+\end{frame}
+\end{document}

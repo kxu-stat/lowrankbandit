@@ -1,0 +1,24 @@
+__pycache__/
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+*.Rcheck/
+lowrankbandit_*.tar.gz
+.Rhistory
+.DS_Store
+# what the runs in reproduction/ write
+reproduction/*/regret_*/
+reproduction/*/debug_*/
+reproduction/*/figures*/
+reproduction/*/replay/
+reproduction/inference/inference_*/
+reproduction/inference/ablation_*/
+reproduction/realdata/mind_*/
+reproduction/realdata/data/
+reproduction/*/*.o[0-9]*
+reproduction/*/*.e[0-9]*
+
+# documentation builds
+site/
+R/docs/

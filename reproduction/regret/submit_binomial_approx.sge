@@ -1,0 +1,19 @@
+#!/bin/bash
+# Regret study, tier approx, binary rewards (p_bar 0.8, amp solved for each truth): the truths
+# s_j ~ j^-2 and j^-1.5, d = 16, K = 16, sphere and normal: 4 cases x 50 replications x 7 arms (A_t2, logistic OFUL,
+# GLM-ESTR given rank 2 at its five T1) = 1,400 cells, one per array task (up to about an hour each; about 600 CPU-h
+# by the table, likely about 1,000 on the authors' cluster).
+# Submit:  JOBID=$(qsub -terse submit_binomial_approx.sge | cut -d. -f1); qsub -hold_jid $JOBID notify.sge
+# Then:    python3 collect_regret.py binomial --tiers approx --out regret_binomial_approx;
+#          python3 verdict_regret.py --out verdict_approx regret_gaussian_approx regret_binomial_approx;
+#          python3 figures_regret.py regret_binomial_approx
+#$ -pe smp 1
+#$ -q long
+#$ -N regret_b_approx
+#$ -t 1-1400
+#$ -tc 110
+#$ -r n
+
+module load python/3.12.15
+cd $SGE_O_WORKDIR
+python3 run_regret.py binomial --tiers approx --out regret_binomial_approx --chunk $SGE_TASK_ID --chunks 1400
