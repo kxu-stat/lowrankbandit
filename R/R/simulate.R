@@ -25,16 +25,28 @@ stream <- function(arms, contexts, theta, family = "gaussian", trials = 1, noise
                    covariates = NULL, main_effects = FALSE) {
   n <- dim(arms)[1]
   K <- dim(arms)[2]
+  d1 <- dim(arms)[3]
+  d2 <- ncol(contexts)
   if (!is.null(uniforms)) uniforms <- matrix(uniforms, nrow = n)
   rows <- function(t) {
     c <- if (is.null(covariates)) NULL else matrix(covariates[t, , ], nrow = K)
     design_rows(matrix(arms[t, , ], nrow = K), contexts[t, ], c, main_effects)
   }
-  means <- function(t) mean_function(as.vector(rows(t) %*% theta), family, trials)
+  # U[t, a] = <z_{t,a}, theta> = c' gamma + m' theta_m + x' theta_x + m' Theta x, for every round and arm at once
+  q <- if (is.null(covariates)) 0 else dim(covariates)[3]
+  p0 <- length(theta) - d1 * d2
+  Theta <- matrix(theta[p0 + seq_len(d1 * d2)], d1, d2)
+  U <- matrix(0, n, K)
+  for (a in seq_len(K)) {
+    m <- matrix(arms[, a, ], n, d1)
+    U[, a] <- rowSums((m %*% Theta) * contexts)
+    if (q > 0) U[, a] <- U[, a] + matrix(covariates[, a, ], n, q) %*% theta[seq_len(q)]
+    if (main_effects) U[, a] <- U[, a] + m %*% theta[q + seq_len(d1)] + contexts %*% theta[q + d1 + seq_len(d2)]
+  }
+  means <- function(t) mean_function(U[t, ], family, trials)
   reward <- function(t, a) {
-    u <- sum(rows(t)[a, ] * theta)
-    if (family == "gaussian") return(u + noise[t])
-    sum(uniforms[t, ] < sigmoid(u))
+    if (family == "gaussian") return(U[t, a] + noise[t])
+    sum(uniforms[t, ] < sigmoid(U[t, a]))
   }
   regret <- function(t, a) {
     m <- means(t)

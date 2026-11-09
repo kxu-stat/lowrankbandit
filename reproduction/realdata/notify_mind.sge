@@ -9,9 +9,9 @@
 cd $SGE_O_WORKDIR
 echo "Array finished at $(date)."
 echo "cells written per directory:"
-find . -path '*/cells/*.json' | cut -d/ -f2 | sort | uniq -c
+find . -path '*/cells/*.json*' | cut -d/ -f2 | sort | uniq -c
 echo "cells with an error per directory:"
-grep -l '"status": "error"' */cells/*.json 2>/dev/null | cut -d/ -f1 | sort | uniq -c
+zgrep -l '"status": "error"' */cells/*.json* 2>/dev/null | cut -d/ -f1 | sort | uniq -c
 echo "Next: python3 collect_mind.py DIR --setup data/mind_setup_D16.npz (debug: --horizon 2000 --replications 2;"
 echo "  the main world: --block main --best mind_regret/collected/best.tsv, debug: debug_mind/collected/best.tsv)"
 echo "  or, after the inference: python3 collect_mind_inference.py PHASE --setup data/mind_setup_D16.npz"

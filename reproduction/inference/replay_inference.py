@@ -18,7 +18,7 @@ drawn again from the seed equal the recorded ones (relative 1e-12), and every ar
 the replayed data; with --rows, Steps 2-4 of every arm at the record's largest N reproduce the run's rows (mu, V and T,
 relative 1e-6: the self-test's standard for simulated runs, so a replay on another machine than the run's passes).
 """
-import argparse, csv, glob, os
+import argparse, csv, glob, gzip, os
 for _var in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_var, "1")          # one core per process
 import numpy as np
@@ -54,7 +54,7 @@ def replay(r):
     def candidates():
         arms = D.draw_arms(rng)
         x = D.context(rng)
-        return np.array([A.stack(m, x, p0) for m in arms])
+        return A.stack_rows(arms, x, p0)
 
     G, b = np.zeros((d, d)), np.zeros(d)
     Zex, reg_ex = np.zeros((tau, d)), np.zeros(tau)
@@ -95,10 +95,11 @@ def stored_rows(run, r):
     """The run's rows of a record's replicate (and N for I3), keyed by (arm, N, target)."""
     block, regime, rep = str(r["block"]), str(r["regime"]), int(r["rep"])
     out = {}
-    for path in glob.glob(os.path.join(run, "parts", "%s_%s_r*.tsv" % (block, regime))):
-        for row in csv.DictReader(open(path), delimiter="\t"):
-            if int(row["rep"]) == rep:
-                out[(row["arm"], int(float(row["N"])), row["target"])] = row
+    for path in glob.glob(os.path.join(run, "parts", "%s_%s_r*.tsv.gz" % (block, regime))):
+        with gzip.open(path, "rt", newline="") as f:
+            for row in csv.DictReader(f, delimiter="\t"):
+                if int(row["rep"]) == rep:
+                    out[(row["arm"], int(float(row["N"])), row["target"])] = row
     return out
 
 

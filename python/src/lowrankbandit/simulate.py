@@ -44,6 +44,19 @@ class Stream:
         self.uniforms = None if uniforms is None else np.asarray(uniforms, dtype=float).reshape(len(self.arms), -1)
         self.covariates = None if covariates is None else np.asarray(covariates, dtype=float)
         self.n, self.K = self.arms.shape[0], self.arms.shape[1]
+        # u[t, a] = <z_{t,a}, theta> = c' gamma + m' theta_m + x' theta_x + m' Theta x, for every round and arm at once
+        d1, d2 = self.arms.shape[2], self.contexts.shape[1]
+        q = 0 if self.covariates is None else self.covariates.shape[2]
+        p0 = self.theta.size - d1 * d2
+        Theta = self.theta[p0:].reshape(d1, d2, order="F")
+        self.u = np.zeros((self.n, self.K))
+        for a in range(self.K):
+            m = self.arms[:, a]
+            self.u[:, a] = np.sum((m @ Theta) * self.contexts, axis=1)
+            if q > 0:
+                self.u[:, a] += self.covariates[:, a] @ self.theta[:q]
+            if main_effects:
+                self.u[:, a] += m @ self.theta[q:q + d1] + self.contexts @ self.theta[q + d1:p0]
 
     def rows(self, t):
         """The design rows of round t."""
@@ -52,14 +65,13 @@ class Stream:
 
     def means(self, t):
         """The mean rewards psi'(<z_{t,a}, theta*>) of the K candidates of round t."""
-        return mean_function(self.rows(t) @ self.theta, self.family, self.trials)
+        return mean_function(self.u[t], self.family, self.trials)
 
     def reward(self, t, a):
         """The reward of arm a in round t."""
-        u = self.rows(t)[a] @ self.theta
         if self.family == "gaussian":
-            return float(u + self.noise[t])
-        return float(np.sum(self.uniforms[t] < sigmoid(u)))
+            return float(self.u[t, a] + self.noise[t])
+        return float(np.sum(self.uniforms[t] < sigmoid(self.u[t, a])))
 
     def regret(self, t, a):
         """The best mean reward of round t minus the mean reward of arm a."""

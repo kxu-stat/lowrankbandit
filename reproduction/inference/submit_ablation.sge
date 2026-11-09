@@ -1,12 +1,13 @@
 #!/bin/bash
-# The ablation of Step 3, the appendix: ablation_step3.py replays the records of the
-# inference run (inference_results/records, written by submit_inference.sge) -- I3 at every N; I1, I1d32 and I2l (lowrank) at the n
-# of ablation_step3.PLAN -- and runs Step 3 in seven versions on the same collections and the same Step 2.  20 tasks,
-# about 25-30 minutes each.  Submit after submit_inference.sge has finished (it needs the records, not the collect).
+# The ablation of Step 3, the appendix: ablation_step3.py replays the records of the inference run
+# (inference_results/records, written by submit_inference.sge) -- I3 at every N; I1, I1d32 and I2l (lowrank) at the n
+# of ablation_step3.PLAN -- and runs Step 3 in seven versions on the same collections and the same Step 2, on the 1,000
+# records of each block: 20 tasks of about 50-60 minutes.  Submit after submit_inference.sge has finished (it needs
+# the records, not the collect).
 # Submit:  qsub submit_ablation.sge
 # A task appends one record at a time and skips the records its part has, so resubmitting finishes a stopped plan.
 # Then (after the inference collect):
-#          python3 figure_ablation.py ablation_results/parts --run inference_results --name ablation_appendix \
+#          python3 figure_ablation.py ablation_results/appendix --run inference_results --name ablation_appendix \
 #              --show I2l:dense:40000,I2l:entry_max:40000,I2l:rank1:40000,I2l:entry_min:40000,I2l:dense:10000,I1:dense:10000,I1d32:dense:10000
 #$ -pe smp 1
 #$ -q long
@@ -17,4 +18,4 @@
 
 module load python/3.12.15
 cd $SGE_O_WORKDIR
-python3 ablation_step3.py inference_results ablation_results/parts --chunk $SGE_TASK_ID --chunks 20
+python3 ablation_step3.py inference_results ablation_results/appendix --chunk $SGE_TASK_ID --chunks 20

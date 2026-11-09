@@ -1,58 +1,45 @@
-<h1 align="center">lowrankbandit</h1>
+# lowrankbandit
 
-<p align="center">
-  <b>Greedy contextual bandits with a low-rank interaction,<br>
-  and asymptotically valid confidence intervals from greedily collected data.</b>
-</p>
+[![Python tests](https://github.com/kxu-stat/lowrankbandit/actions/workflows/python.yml/badge.svg)](https://github.com/kxu-stat/lowrankbandit/actions/workflows/python.yml)
+[![R-CMD-check](https://github.com/kxu-stat/lowrankbandit/actions/workflows/R-CMD-check.yml/badge.svg)](https://github.com/kxu-stat/lowrankbandit/actions/workflows/R-CMD-check.yml)
 
-<p align="center">
-  <a href="https://github.com/kxu-stat/lowrankbandit/actions/workflows/python.yml"><img alt="Python tests" src="https://github.com/kxu-stat/lowrankbandit/actions/workflows/python.yml/badge.svg"></a>
-  <a href="https://github.com/kxu-stat/lowrankbandit/actions/workflows/R-CMD-check.yml"><img alt="R-CMD-check" src="https://github.com/kxu-stat/lowrankbandit/actions/workflows/R-CMD-check.yml/badge.svg"></a>
-  <a href="https://kxu-stat.github.io/lowrankbandit/"><img alt="Documentation" src="https://img.shields.io/badge/docs-website-3f51b5"></a>
-  <img alt="Python 3.9+" src="https://img.shields.io/badge/python-3.9%2B-3776ab">
-  <img alt="R 4.0+" src="https://img.shields.io/badge/R-4.0%2B-276dc3">
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green"></a>
-</p>
+Python and R implementations of the methods in
 
-<p align="center">
-  <img src="docs/animations/greedy_flow_animation.gif" width="760" alt="Algorithm 1: explore briefly, fit a low-rank model, choose greedily, refit">
-</p>
+> Ke Xu, Yuefeng Han and Zifeng Zhao. Regret Minimization and Statistical Inference for Low-Rank Contextual
+> Generalized Linear Bandits, with Applications to Advertising and Product Design. Manuscript, 2026.
 
-An ad platform shows one of $K$ candidate ads to each arriving user. Whether the user clicks depends on how the ad's
-features interact with the user's, through a $d_1 \times d_2$ matrix of interaction effects that is typically of low
-rank. **lowrankbandit** learns this matrix while it chooses the ads, and afterward answers questions about it, such
-as *how strongly does this kind of user respond to this kind of ad*, with confidence intervals that are
-asymptotically valid although every choice was made greedily from the data.
+In round $t$ a policy shows one of $K$ arms, with features $m_{t,a} \in \mathbb{R}^{d_1}$, for a context
+$x_t \in \mathbb{R}^{d_2}$; the reward follows a generalized linear model whose linear predictor contains the
+interaction $m_{t,a}^\top \Theta x_t$, with $\Theta$ of low rank.
 
-It is the code accompanying *Regret Minimization and Statistical Inference for Low-Rank Contextual Generalized Linear
-Bandits, with Applications to Advertising and Product Design* by Ke Xu, Yuefeng Han and Zifeng Zhao.
+- `GreedyPolicy` (Algorithm 1): a short uniform exploration, then greedy choices from a nuclear-norm-penalized GLM
+  estimate refitted every round, with the penalty constant chosen by cross-validation inside the run.
+- `TwoTrackPolicy` and `two_track_inference` (Algorithm 2): data collection by two greedy tracks after a shared
+  exploration, then estimates, standard errors and confidence intervals for linear functionals
+  $\langle A, \theta^* \rangle$ of the parameter, asymptotically valid although the arms were chosen greedily.
 
-- **Regret minimization (Algorithm 1).** A short uniform exploration, then greedy choices from a
-  nuclear-norm-penalized GLM refitted every round, with its penalty tuned by cross-validation inside the run. The
-  aim is low regret: little expected reward lost against the best arm of each round.
-- **Inference after greedy choices (Algorithm 2).** Data collected by two greedy tracks after a shared exploration,
-  a refit on the tangent space of low-rank matrices and a predictable calibration give asymptotically normal
-  estimates and confidence intervals for linear functionals $\langle A, \theta^* \rangle$ of the parameter, such
-  as one interaction effect or the effect of a given ad on a given user.
-- **Python and R.** The same functions, arguments and defaults; given the same rounds, the two packages return the
-  same numbers, which the tests check.
-- **Few dependencies.** Six source files per language, one function per step of the algorithms; numpy and scipy in
-  Python, base R only.
+The R package has the same functions, arguments and defaults; given the same rounds, the two packages choose the same
+arms and return the same estimates up to rounding error.
 
 ## Installation
+
+Python 3.11 or later, with numpy and scipy:
 
 ```bash
 pip install "git+https://github.com/kxu-stat/lowrankbandit.git#subdirectory=python"
 ```
 
+R 4.0 or later, with Rcpp and RcppEigen; installing from GitHub compiles C++ code, which needs Rtools on Windows and
+the Xcode command line tools on macOS:
+
 ```r
 remotes::install_github("kxu-stat/lowrankbandit", subdir = "R")
 ```
 
-## Quick start
+## Example
 
-Simulate 3,000 rounds, collect the data with the two-track policy, and estimate the effect of a new ad on a new user
-(about five seconds):
+Simulate 3,000 rounds, collect the data with the two-track policy, and estimate the effect $m^\top \Theta x$ of a new
+ad $m$ on a new user $x$:
 
 ```python
 import numpy as np
@@ -108,71 +95,22 @@ estimate 1.542, 95% interval [1.302, 1.782]
 truth 1.397
 ```
 
-R draws its own random numbers, so its stream and numbers differ from Python's.
+R draws its own random numbers, so its stream, and hence its numbers, differ from Python's.
 
 </details>
 
 In an application, the loop is your system: pass the candidates' features and the context to `choose`, show the
-chosen arm, and pass its reward to `observe`. [Getting started](https://kxu-stat.github.io/lowrankbandit/getting-started/)
-continues the example with Algorithm 1 alone and several targets at once, and shows how to switch to binary rewards
-or add main effects.
-
-## What it does, on simulated data
-
-<p align="center">
-  <img src="docs/assets/regret.png" width="560" alt="Cumulative regret of Algorithm 1 and of the same policy with a near-zero penalty">
-</p>
-
-On 30 simulated streams, the same greedy policy with a near-zero penalty ($c = 10^{-4}$) pays about 1.7 times the
-regret of Algorithm 1, whose penalty is tuned by cross-validation inside the run.
-
-<p align="center">
-  <img src="docs/assets/inference.png" width="860" alt="Confidence intervals and the normal approximation">
-</p>
-
-Over 200 simulated streams, the 95% intervals of Algorithm 2 covered the truth 191 times, and the standardized
-estimates follow the standard normal distribution, although the arms were chosen greedily. Both figures are made by
-[`python/examples/make_figures.py`](python/examples/make_figures.py).
-
-## How it works
-
-**Algorithm 1** (animation above): explore uniformly for $\tau \asymp (d_1 + d_2)\log n$ rounds; then, in every
-round, fit the nuclear-norm-penalized maximum likelihood estimate on all rounds so far and show the arm with the
-largest fitted reward.
-
-**Algorithm 2** (animation below) collects the data with two greedy tracks that take the rounds in turn after a
-shared exploration, each learning from the exploration and its own rounds only. Each track's estimate is refitted
-on the tangent space of rank-$r_0$ matrices and corrected with the residuals of the *other* track, whose weights are
-fixed before each reward is seen; the two folds are averaged. Because the tracks do not depend on each other, the
-correction is a martingale, and the estimate is asymptotically normal.
-
-<p align="center">
-  <img src="docs/animations/two_track_animation.gif" width="760" alt="Algorithm 2: two-track cross-fitted inference">
-</p>
-
-[How it works](https://kxu-stat.github.io/lowrankbandit/how-it-works/) gives every step with its formula, and
-[Settings](https://kxu-stat.github.io/lowrankbandit/settings/) every default.
+chosen arm, and pass its reward to `observe`.
 
 ## Documentation
 
-**<https://kxu-stat.github.io/lowrankbandit/>**: getting started, the algorithms step by step, the settings, and the
-function reference for [Python](https://kxu-stat.github.io/lowrankbandit/reference/python/) and
-[R](https://kxu-stat.github.io/lowrankbandit/R/reference/).
-
-## Repository
-
-| Folder | Contents |
-|---|---|
-| [`python/`](python) | the Python package: source, tests, examples |
-| [`R/`](R) | the R package: the same six source files, tests, examples |
-| [`reproduction/`](reproduction) | the code of the paper's numerical study (simulations and the MIND news data); separate from the package |
-| [`docs/`](docs) | the documentation website and the LaTeX sources of the animations |
+<https://kxu-stat.github.io/lowrankbandit/>: the algorithms step by step, the settings and their defaults, and the
+function reference for Python and R.
 
 ## Reproducing the paper
 
-[`reproduction/`](reproduction) holds the code that produced the paper's tables and figures: the regret
-comparisons with OFUL (Abbasi-Yadkori, Pál and Szepesvári, 2011) and ESTR (Jun, Willett, Wright and Nowak, 2019),
-the inference simulations and the MIND news-recommendation study, with a self-test and instructions for every
+[`reproduction/`](reproduction) holds the code that produced the paper's tables and figures (the regret comparisons
+with OFUL and ESTR, the inference simulations and the MIND news-recommendation study), with instructions for every
 run.
 
 ## Citation

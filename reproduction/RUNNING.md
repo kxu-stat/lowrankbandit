@@ -28,14 +28,14 @@ Run each command from the folder named in the first column.  Each full run is pr
 | `regret/` | approximately low-rank truths, Gaussian | `submit_debug_approx_d32.sge` | `submit_gaussian_approx.sge` | 7,200 (1,200 tasks) | 85-115 |
 | `regret/` | approximately low-rank truths, binary | `submit_debug_approx_binomial.sge` | `submit_binomial_approx.sge` | 1,400 | about 600 |
 | `regret/` | d = 32 | (with the Gaussian approx) | `submit_gaussian_d32.sge` | 1,400 | 280-420 |
-| `inference/` | inference simulations | `submit_debug.sge` | `submit_inference.sge` | 611 tasks | 1,300-1,500 |
+| `inference/` | inference simulations | `submit_debug.sge` | `submit_inference.sge` | 1,222 tasks | 1,900-2,000 |
 | `realdata/` | MIND regret, down-sampled world | `submit_debug_mind.sge` | `submit_mind.sge` | 1,150 | 4,500-5,400 |
 | `realdata/` | MIND regret, main world | `submit_debug_mind_main.sge` | `submit_mind_main.sge` | 250 | 1,250-1,350 |
-| `realdata/` | MIND inference | `submit_debug_mind_inference.sge` | `submit_mind_inference_eval.sge` | 1,000 tasks | about 1,400 |
+| `realdata/` | MIND inference | `submit_debug_mind_inference.sge` | `submit_mind_inference_eval.sge` | 2,000 tasks | about 1,500 |
 | `inference/` | ablation of Step 3, main text | by hand (below) | `submit_tie_ablation.sge` | 10 tasks | under 1 |
-| `inference/` | ablation of Step 3, appendix | by hand (below) | `submit_ablation.sge` | 20 tasks | 8-10 |
+| `inference/` | ablation of Step 3, appendix | by hand (below) | `submit_ablation.sge` | 20 tasks | 16-20 |
 
-The CPU hours are those of the authors' cluster, about 12,000-13,500 in all.  The runs are independent except:
+The CPU hours are those of the authors' cluster, about 13,000-14,500 in all.  The runs are independent except:
 the MIND main world runs the competitors' configurations that were best in the down-sampled world, so it follows
 that run's collect; the appendix ablation replays the records of the inference simulations; the inference collect
 compares with the regret runs' single track if they are there.
@@ -57,7 +57,7 @@ The header of each `submit_*.sge` names the collect that follows it.  The full r
 
     # inference/
     qsub submit_inference.sge
-    python3 collect_inference.py --regret-curves ../regret/regret_gaussian/collected/regret_curves.tsv,../regret/regret_binomial/collected/regret_curves.tsv
+    qsub submit_collect_inference.sge          # the collect, as a job: about 4 million rows, one table at a time
     python3 figures_inference.py
 
     # realdata/ (the data files first: realdata/README.md)
@@ -66,9 +66,8 @@ The header of each `submit_*.sge` names the collect that follows it.  The full r
     python3 collect_mind.py mind_regret_main --setup data/mind_setup_D16.npz --block main --best mind_regret/collected/best.tsv
     python3 figures_mind.py mind_regret;  python3 figures_mind.py mind_regret_main
     qsub submit_mind_inference_eval.sge
-    python3 collect_mind_inference.py evaluation --setup data/mind_setup_D16.npz
-    python3 oracle_mind_inference.py evaluation --setup data/mind_setup_D16.npz --world down4
-    python3 oracle_mind_inference.py evaluation --setup data/mind_setup_D16.npz --world main
+    qsub submit_collect_mind_inference.sge     # the collect, as a job: one world's rows at a time
+    qsub submit_oracle_down4.sge; qsub submit_oracle_main.sge     # the oracle check, after the collect
 
     # inference/, the ablation of Step 3: its check run by hand (about a minute, after the check run of the inference)
     python3 tie_ablation.py 200 1 2 ablation_debug/tie
@@ -77,12 +76,14 @@ The header of each `submit_*.sge` names the collect that follows it.  The full r
     # then the two runs (the appendix part after submit_inference.sge)
     qsub submit_tie_ablation.sge;   python3 figure_ablation.py ablation_results/tie --blocks "" --name ablation_tie
     qsub submit_ablation.sge
-    python3 figure_ablation.py ablation_results/parts --run inference_results --name ablation_appendix \
+    python3 figure_ablation.py ablation_results/appendix --run inference_results --name ablation_appendix \
         --show I2l:dense:40000,I2l:entry_max:40000,I2l:rank1:40000,I2l:entry_min:40000,I2l:dense:10000,I1:dense:10000,I1d32:dense:10000
 
-Each collect reports the cells it found, failed and missing; a failed cell keeps its traceback.  After a collect,
-`check_*.py RUN_DIR` prints the run's health check.  The check runs collect with the options in their script's
-header, and `python3 ../selftest.py --cells RUN_DIR` compares the regret check runs' cells with the authors' values.
+Each collect reports the cells it found, failed and missing; a failed cell keeps its traceback.  The inference
+simulations' parts and merged tables and the MIND inference's cells are gzip-compressed (`zcat` reads them).  After a
+collect, `check_*.py RUN_DIR` prints the run's health check.  The check runs collect with the options in their
+script's header, and `python3 ../selftest.py --cells RUN_DIR` compares the regret check runs' cells with the authors'
+values.
 
 ## Recomputing one cell
 

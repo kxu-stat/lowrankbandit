@@ -8,7 +8,7 @@
     pip install "git+https://github.com/kxu-stat/lowrankbandit.git#subdirectory=python"
     ```
 
-    Python 3.9 or later, with numpy and scipy.
+    Python 3.11 or later, with numpy and scipy.
 
 === "R"
 
@@ -17,7 +17,8 @@
     remotes::install_github("kxu-stat/lowrankbandit", subdir = "R")
     ```
 
-    R 4.0 or later; base R only.
+    R 4.0 or later, with Rcpp and RcppEigen. The solvers are in C++, compiled at installation, which needs Rtools on
+    Windows and the Xcode command line tools on macOS.
 
 ## Choosing arms: Algorithm 1
 

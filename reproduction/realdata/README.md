@@ -28,7 +28,7 @@ logs that keep every click and a quarter of the non-clicks (every log-odds plus 
   authors' 2y - 1 versions, two greedy comparators without the interaction, and the two-track collection of the
   inference.  The main world (appendix), 80,000 rounds: our method, the two-track collection, the two competitors at
   their best configuration in the down-sampled world, and the greedy comparator on the covariates c alone.
-- Inference (`run_mind_inference.py`): 500 streams in each world, Algorithm 2 at n = 10,000 to 80,000 for every
+- Inference (`run_mind_inference.py`): 1,000 streams in each world, Algorithm 2 at n = 10,000 to 80,000 for every
   choice of n0 of the simulations, 32 targets (log odds ratios and their parts for the 8 largest categories).
 
 ## Data
@@ -50,5 +50,6 @@ of checks.  The SHA-256 of the authors' files begin with `01abc1c7958c48ba` (`mi
 ## Output
 
 `mind_regret*/cells/` and `collected/` (the tables, `verdict_mind.md`); `figures_mind/`: the regret figures.
-`mind_inference_evaluation/collected/WORLD/`: the tables and figures of each world, among them `paper_qq_news_n<n>`
-for the paper, and `reported_n.md`.
+`mind_inference_evaluation/cells/`: one gzip-compressed cell per stream (`KEY.json.gz`) and its stream file (the
+seed, the arms played, the clicks); `mind_inference_evaluation/collected/WORLD/`: the tables and figures of each
+world, among them `paper_qq_news_n<n>` for the paper and the oracle check, and `reported_n.md`.

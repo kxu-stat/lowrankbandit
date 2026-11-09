@@ -2,7 +2,9 @@
 greedy data collection.
 
   1. the model                 canonical GLM on z = vec(m x') (column-major vec); a design's leading p0 coordinates
-                               are unpenalized main effects (the tie design's (m, x); MIND's covariates)
+                               are unpenalized main effects (the tie design's (m, x); MIND's covariates); the rows of
+                               a round's K candidates (stack_rows), and rows kept as their factors (c, m, x) with the
+                               two products the logit-link solver uses (rows_times, rows_t_times)
   2. the tangent geometry      projection, basis, rank truncation
   3. the estimator             FISTA (identity link), proximal Newton (logit link), on the domain C_R
   4. the recipe                tau and lambda_s as in Algorithm 1 (c by 10-fold CV inside each track),
@@ -18,9 +20,12 @@ Also: cramer_rao() (the Cramer-Rao standard error of the collected design) and t
 A design object D supplies d1, d2, d (= p0 + d1 d2), r0, K, family, nb, theta (the truth, used only for the rewards,
 the scoring and the labeled offline diagnostics), radius (R_1, ..., R_G, R_Theta), optionally main_sizes (the
 main-effect groups; default (d1, d2)), and either draw_arms / context / reward or next_round / reward_arm (a design
-that supplies each round's stacked rows).  D.anchor_at_main_fit takes the pilot score at the main-effects-only fit.
-The offline diagnostics also read sigma_eps (identity link) and the truth's frame Us, Vs; design_split reads kappa_D.
+that supplies each round's stacked rows, z = (c, m, x, vec(m x')), m and x its last two main-effect groups, as MIND's;
+or z without them, whose refits then use the stacked rows).
+D.anchor_at_main_fit takes the pilot score at the main-effects-only fit.  The offline diagnostics also read sigma_eps
+(identity link) and the truth's frame Us, Vs; design_split reads kappa_D.
 """
+import math
 from fractions import Fraction
 import numpy as np
 from simulation import sigmoid, vec, tangent_project
@@ -43,11 +48,44 @@ def main_len(D):
     return D.d - D.d1 * D.d2
 
 
-def stack(m, x, p0):
-    """The design row of one (arm, context): vec(m x'), preceded by (m, x) when p0 > 0."""
-    if p0 == 0:
-        return vec(np.outer(m, x))
-    return np.concatenate([m, x, vec(np.outer(m, x))])
+def stack_rows(arms, x, p0):
+    """The design rows of a round's K candidates (the rows m_k of `arms`) at context x, a K x d array: row k is
+    vec(m_k x'), preceded by (m_k, x) when p0 > 0, all in one product."""
+    inter = (arms[:, None, :] * x[:, None]).reshape(len(arms), -1)      # [k, j, i] = m_ki x_j: column-major vec
+    return inter if p0 == 0 else np.hstack([arms, np.tile(x, (len(arms), 1)), inter])
+
+
+def rows_times(Z, v):
+    """Z v for design rows Z: an array, or the rows' factors (C, M, X) of z_t = (c_t, vec(m_t x_t')), for which
+
+        Z v = C v_c + rowsum((M Theta) * X),    Theta the interaction block of v (column-major).
+
+    The factors give the same numbers as the stacked rows up to rounding, from arrays (p0 + d1 + d2) / (p0 + d1 d2) as
+    large and by matrix-matrix products."""
+    if isinstance(Z, np.ndarray):
+        return Z @ v
+    C, M, X = Z
+    p0, d1, d2 = C.shape[1], M.shape[1], X.shape[1]
+    u = np.einsum("ij,ij->i", M @ v[p0:].reshape(d1, d2, order="F"), X)
+    return u + C @ v[:p0] if p0 else u
+
+
+def rows_t_times(Z, r):
+    """Z' r for design rows Z: an array, or the factors (C, M, X), for which Z' r = (C' r, vec(M' diag(r) X))."""
+    if isinstance(Z, np.ndarray):
+        return Z.T @ r
+    C, M, X = Z
+    inter = (M.T @ (X * r[:, None])).reshape(-1, order="F")
+    return np.concatenate([C.T @ r, inter]) if C.shape[1] else inter
+
+
+def stacked(Z):
+    """The design rows as an array: Z itself, or the rows (c_t, vec(m_t x_t')) built from the factors (C, M, X)."""
+    if isinstance(Z, np.ndarray):
+        return Z
+    C, M, X = Z
+    s, d1, d2 = len(M), M.shape[1], X.shape[1]
+    return np.hstack([C, np.einsum("kj,ki->kji", X, M).reshape(s, d1 * d2)])
 
 
 # ================================================================ 2. the tangent geometry
@@ -80,6 +118,11 @@ def truncate(theta, d1, d2, r0):
 
 
 # ================================================================ 3. the estimator
+def norm2(v):
+    """The Euclidean norm of a vector: np.linalg.norm(v) without its overhead, which counts in the solvers' loops."""
+    return math.sqrt(v.dot(v))
+
+
 def prox(u, step, lam, d1, d2, radius=None, sizes=None):
     """Proximal map of step lam ||Theta||_* on the domain C_R: the interaction block's singular values thresholded and
     scaled into the Frobenius ball, each main-effect block projected onto its ball.  radius = (R_1, ..., R_G, R_Theta)
@@ -90,7 +133,7 @@ def prox(u, step, lam, d1, d2, radius=None, sizes=None):
     sv = np.maximum(sv - step * lam, 0.0)
     if radius is not None:
         RT = radius[-1]
-        nT = np.linalg.norm(sv)
+        nT = norm2(sv)
         if nT > RT: sv *= RT / nT
     inter = vec((Uu * sv) @ Vt)
     if p == 0:
@@ -101,7 +144,7 @@ def prox(u, step, lam, d1, d2, radius=None, sizes=None):
     for g, size in enumerate(sizes):
         block = u[start:start + size].copy()
         if radius is not None:
-            nrm = np.linalg.norm(block)
+            nrm = norm2(block)
             if nrm > radius[g]: block *= radius[g] / nrm
         blocks.append(block)
         start += size
@@ -116,11 +159,11 @@ def fista(G, b, lam, d1, d2, x0, L=None, iters=400, tol=1e-6, radius=None, sizes
     x = x0.copy(); y = x.copy(); tk = 1.0
     for _ in range(iters):
         xn = prox(y - (G @ y - b) / L, 1.0 / L, lam, d1, d2, radius, sizes)
-        if np.linalg.norm(L * (y - xn)) <= tol * max(1.0, L * np.linalg.norm(xn)):
+        if norm2(L * (y - xn)) <= tol * max(1.0, L * norm2(xn)):
             return xn
         if np.dot(y - xn, xn - x) > 0:
             tk = 1.0                                             # adaptive restart
-        tn = (1 + np.sqrt(1 + 4 * tk * tk)) / 2
+        tn = (1 + math.sqrt(1 + 4 * tk * tk)) / 2
         y = xn + ((tk - 1) / tn) * (xn - x)
         x, tk = xn, tn
     return x
@@ -131,31 +174,34 @@ def proximal_newton(Z, y, lam, d1, d2, x0, nb, radius=None, H=None, LH=None, L_m
     """min (1/s) sum_i [psi(z_i'x) - y_i z_i'x] + lam ||Theta(x)||_* on C_R (logit link, nb trials) by proximal Newton:
     each step minimizes the quadratic model with the curvature-weighted Gram H by `fista` and is accepted by Armijo
     backtracking.  H (possibly passed in lagged) is rebuilt after a backtracked step, when the residual fails to halve,
-    or after eight steps.  Returns (x, steps, hit_cap, exact refreshes)."""
+    or after eight steps.  Z: the rows, an array or their factors (rows_times).  Returns (x, steps, hit_cap, exact
+    refreshes)."""
     s, p = len(y), x0.size - d1 * d2
     if L_max is None:
-        L_max = 0.25 * nb * np.linalg.eigvalsh(Z.T @ Z / s)[-1]
+        Zd = stacked(Z)
+        L_max = 0.25 * nb * np.linalg.eigvalsh(Zd.T @ Zd / s)[-1]
     L_max = max(L_max, 1e-12)
 
     def nuc(v):
         return float(np.linalg.svd(v[p:].reshape(d1, d2, order="F"), compute_uv=False).sum())
 
-    def objective(v, u):
-        return float(np.mean(nb * np.logaddexp(0.0, u) - y * u)) + lam * nuc(v)
+    def loss(u):
+        return float(np.mean(nb * np.logaddexp(0.0, u) - y * u))
 
-    x = x0.copy(); u = Z @ x
+    x = x0.copy(); u = rows_times(Z, x)
     refresh, n_ref, res_old = H is None, 0, np.inf
     for it in range(1, iters + 1):
-        g = Z.T @ (nb * sigmoid(u) - y) / s
+        g = rows_t_times(Z, nb * sigmoid(u) - y) / s
         xp = prox(x - g / L_max, 1.0 / L_max, lam, d1, d2, radius, sizes)
-        res = np.linalg.norm(L_max * (x - xp)) / max(1.0, L_max * np.linalg.norm(xp))
+        res = norm2(L_max * (x - xp)) / max(1.0, L_max * norm2(xp))
         if res <= tol:
             return xp, it - 1, False, n_ref
         refresh = refresh or res > 0.5 * res_old or it > 8
         res_old = res
         if refresh:
             w = psi2(u, "binomial", nb)
-            H = Z.T @ (Z * w[:, None]) / s
+            Zd = stacked(Z)
+            H = Zd.T @ (Zd * w[:, None]) / s
             LH = np.linalg.eigvalsh(H)[-1]
             n_ref += 1
         if LH is None:
@@ -163,16 +209,18 @@ def proximal_newton(Z, y, lam, d1, d2, x0, nb, radius=None, H=None, LH=None, L_m
         v = fista(H, H @ x - g, lam, d1, d2, x, L=LH, iters=inner_iters, tol=max(inner_tol, 0.1 * res), radius=radius,
                   sizes=sizes)
         dlt = v - x
-        Fx, nx = objective(x, u), nuc(x)
-        model = float(g @ dlt) + lam * (nuc(v) - nx)
-        alpha, xn, un = 1.0, v, Z @ v
-        while objective(xn, un) > Fx + 1e-4 * alpha * model and alpha > 1e-3:
+        nx, nn = nuc(x), nuc(v)                                      # each point's nuclear norm once
+        Fx = loss(u) + lam * nx
+        model = float(g @ dlt) + lam * (nn - nx)
+        alpha, xn, un = 1.0, v, rows_times(Z, v)
+        while loss(un) + lam * nn > Fx + 1e-4 * alpha * model and alpha > 1e-3:
             alpha *= 0.5
             xn = x + alpha * dlt
-            un = Z @ xn
+            un = rows_times(Z, xn)
+            nn = nuc(xn)
         x, u = xn, un
         refresh = alpha < 1.0
-    g = Z.T @ (nb * sigmoid(u) - y) / s
+    g = rows_t_times(Z, nb * sigmoid(u) - y) / s
     xp = prox(x - g / L_max, 1.0 / L_max, lam, d1, d2, radius, sizes)
     return xp, iters, True, n_ref
 
@@ -200,10 +248,10 @@ def main_only_fit(C, y, family, nb, radii, sizes, tol=1e-10, maxit=200000):
         if radii is not None:
             start = 0
             for size, R_g in zip(sizes, radii):
-                nrm = np.linalg.norm(new[start:start + size])
+                nrm = norm2(new[start:start + size])
                 if nrm > R_g: new[start:start + size] *= R_g / nrm
                 start += size
-        if np.linalg.norm(new - gamma) <= tol * max(1.0, np.linalg.norm(new)):
+        if norm2(new - gamma) <= tol * max(1.0, norm2(new)):
             return new
         gamma = new
     raise RuntimeError("main-effects-only pilot fit did not converge")
@@ -262,11 +310,16 @@ def cv_constant(Zs, Ys, base, theta, D, seed):
         Zt, Yt = Zs[tr], Ys[tr]
         s = len(Yt)
         start = theta
+        G = Zt.T @ Zt / s                                    # the fold's Gram and its top eigenvalue: once for the
+        L = np.linalg.eigvalsh(G)[-1]                        # whole grid
+        if D.family == "gaussian":
+            b = Zt.T @ Yt / s
         for j, c in enumerate(CV_GRID):
             if D.family == "gaussian":
-                start = fista(Zt.T @ Zt / s, Zt.T @ Yt / s, c * base(s), d1, d2, start, radius=radius, sizes=sizes)
+                start = fista(G, b, c * base(s), d1, d2, start, L=L, radius=radius, sizes=sizes)
             else:
-                start = proximal_newton(Zt, Yt, c * base(s), d1, d2, start, nb, radius, sizes=sizes)[0]
+                start = proximal_newton(Zt, Yt, c * base(s), d1, d2, start, nb, radius, L_max=0.25 * nb * L,
+                                        sizes=sizes)[0]
             eta = Zs[te] @ start
             if D.family == "gaussian":
                 loss[j] += np.sum((Ys[te] - eta) ** 2)
@@ -368,15 +421,20 @@ def collect(D, tau, N_max, rng, c_lam):
     pulls a_t = argmax_a z_{t,a}' theta_hat_{t-1}.  c_lam: a number or "cv" (each track chooses its constant by
     `cv_constant` at `cv_checkpoints`; the fold seeds are drawn from rng before the exploration).  Records the rows,
     the responses, the pilot, the CV choices, every round's expected regret and the arm played in every round (arm_ex,
-    arm: the index among the round's K candidates, so a collection can be replayed from its seed)."""
+    arm: the index among the round's K candidates, so a collection can be replayed from its seed).  Under the
+    logit link each track's refits read its rows as their factors (c, m, x): m the arm played and x the context, or,
+    for a design that supplies its rows, the last two main-effect groups of z (without them, the stacked rows)."""
     cv = isinstance(c_lam, str) and c_lam == "cv"
     cv_seed = int(rng.integers(2 ** 31)) if cv else None
     d1, d2, K, d, p0 = D.d1, D.d2, D.K, D.d, main_len(D)
     family, nb, radius = D.family, D.nb, D.radius
     sizes = getattr(D, "main_sizes", None)            # None: the groups (m, x)
     rows_design = hasattr(D, "next_round")            # the design supplies each round's stacked rows
+    factored = not rows_design or p0 >= d1 + d2       # the rows' factors (c, m, x) are known
+    mx = lambda z: (z[p0 - d1 - d2:p0 - d2], z[p0 - d2:p0])               # (m, x) of z = (c, m, x, vec(m x'))
     G, b = np.zeros((d, d)), np.zeros(d)
     Zex, Yex = np.zeros((tau, d)), np.zeros(tau)
+    Mex, Xex = np.zeros((tau, d1)), np.zeros((tau, d2))                   # the factors m, x of the rows
     reg_ex = np.zeros(tau)
     arm_ex = np.zeros(tau, dtype=np.int64)
     for t in range(tau):
@@ -389,13 +447,17 @@ def collect(D, tau, N_max, rng, c_lam):
             arms = D.draw_arms(rng)
             x = D.context(rng)
             a = rng.integers(K)
-            Zc = np.array([stack(m, x, p0) for m in arms])
+            Zc = stack_rows(arms, x, p0)
             z = Zc[a]
             yt = D.reward(rng, z @ D.theta)
         mean = mean_reward(Zc @ D.theta, family)
         reg_ex[t] = mean.max() - mean[a]
         G += np.outer(z, z); b += yt * z
         Zex[t], Yex[t], arm_ex[t] = z, yt, a
+        if factored:
+            Mex[t], Xex[t] = mx(z) if rows_design else (arms[a], x)
+    if factored:
+        assert np.array_equal(stacked((Zex[:, :p0], Mex, Xex)), Zex)   # the factors give the rows exactly
     n_tr = N_max // 2
     solver = dict(iters=0, calls=0, caps=0, refresh=0)
     Lmx = [None, None]                        # lambda_max of the per-track Gram, refreshed on a schedule
@@ -411,8 +473,12 @@ def collect(D, tau, N_max, rng, c_lam):
         solver["iters"] += it; solver["calls"] += 1; solver["caps"] += int(cap)
         Zall = [np.zeros((tau + n_tr, d)), np.zeros((tau + n_tr, d))]
         Yall = [np.zeros(tau + n_tr), np.zeros(tau + n_tr)]
+        Call = [np.zeros((tau + n_tr, p0)), np.zeros((tau + n_tr, p0))]  # the same rows as their factors
+        Mall = [np.zeros((tau + n_tr, d1)), np.zeros((tau + n_tr, d1))]
+        Xall = [np.zeros((tau + n_tr, d2)), np.zeros((tau + n_tr, d2))]
         for j in (0, 1):
             Zall[j][:tau], Yall[j][:tau] = Zex, Yex
+            Call[j][:tau], Mall[j][:tau], Xall[j][:tau] = Zex[:, :p0], Mex, Xex
         Hw, LH, s_ref = [None, None], [None, None], [0, 0]
     Z = [np.zeros((n_tr, d)), np.zeros((n_tr, d))]
     Y = [np.zeros(n_tr), np.zeros(n_tr)]
@@ -438,7 +504,8 @@ def collect(D, tau, N_max, rng, c_lam):
                         w = psi2(Zall[j][:s] @ th[j], "binomial", nb)
                         Hw[j] = Zall[j][:s].T @ (Zall[j][:s] * w[:, None]); s_ref[j] = s
                         LH[j] = np.linalg.eigvalsh(Hw[j] / s)[-1]
-                    th[j], it, cap, nref = proximal_newton(Zall[j][:s], Yall[j][:s], lam, d1, d2, th[j], nb,
+                    rows = (Call[j][:s], Mall[j][:s], Xall[j][:s]) if factored else Zall[j][:s]
+                    th[j], it, cap, nref = proximal_newton(rows, Yall[j][:s], lam, d1, d2, th[j], nb,
                                                            radius, H=Hw[j] / s, LH=LH[j], L_max=0.25 * nb * Lmx[j],
                                                            sizes=sizes)
                     solver["iters"] += it; solver["calls"] += 1; solver["caps"] += int(cap); solver["refresh"] += nref
@@ -447,7 +514,7 @@ def collect(D, tau, N_max, rng, c_lam):
             else:
                 arms = D.draw_arms(rng)
                 x = D.context(rng)
-                Zc = np.array([stack(m, x, p0) for m in arms])
+                Zc = stack_rows(arms, x, p0)
             a = int(np.argmax(Zc @ th[j]))                           # the greedy choice
             mean = mean_reward(Zc @ D.theta, family)
             reg[j][t] = mean.max() - mean[a]
@@ -457,6 +524,9 @@ def collect(D, tau, N_max, rng, c_lam):
             Gj[j] += np.outer(z, z); bj[j] += yt * z
             if family != "gaussian":
                 Zall[j][s], Yall[j][s] = z, yt
+                if factored:
+                    Call[j][s] = z[:p0]
+                    Mall[j][s], Xall[j][s] = mx(z) if rows_design else (arms[a], x)
                 if Hw[j] is not None:
                     Hw[j] += psi2(z @ th[j], "binomial", nb) * np.outer(z, z)
     return dict(Z=Z, Y=Y, G_ex=G, b_ex=b, Z_ex=Zex, Y_ex=Yex, tau=tau, pilot=pilot, solver=solver,
@@ -503,14 +573,16 @@ def cramer_rao(D, rec, N, As):
 
 
 # ================================================================ 6. Steps 2-4: inference
-def fold_estimates(D, rec, N, n0, rank_rule=None):
+def fold_estimates(D, rec, N, n0, rank_rule=None, cache=None):
     """Step 2 of Algorithm 2 for both folds j = 0, 1, on the first N rounds of the collection (n_tr = N / 2 per
     track).  Fold j: the nuisance fit theta_breve on S_o and the first n0 rounds of track j, at the penalty level
     its track used at that sample size; its rank-r0 truncation and tangent basis Q; kappa_hat, the average tangent
     eigenvalue of the curvature-weighted exploration Gram; and the predictable ridge-type refit on rounds
     n0 + 1, ..., n_tr of track j at lambda_ref = m kappa_hat / (2 C_ref log m), truncated again.  This gives
     theta_hat^(j) and its tangent frame (U, V).  With rank_rule, fold j's truncation rank is chosen on fold j's
-    pilot data at its nuisance fit.  Step 2 does not involve the loading A, so one call serves every target."""
+    pilot data at its nuisance fit.  Step 2 does not involve the loading A, so one call serves every target.  The
+    nuisance fit depends on (j, n0) alone, so a dict `cache` keeps it for the other arms and n of the same
+    collection."""
     d1, d2, r0, p0 = D.d1, D.d2, D.r0, main_len(D)
     family, nb, radius = D.family, D.nb, D.radius
     sizes = getattr(D, "main_sizes", None)
@@ -526,14 +598,19 @@ def fold_estimates(D, rec, N, n0, rank_rule=None):
         Z, Y = rec["Z"][j][:n_tr], rec["Y"][j][:n_tr]
         s = tau + n0
         lam = penalty_level(c_nuis[j], score, tau, n_h, d1, d2, s)  # the track's level at this fit's size
-        if family == "gaussian":
+        if cache is not None and (j, n0) in cache:
+            brev, it, cap = cache[(j, n0)]
+        elif family == "gaussian":
             G = rec["G_ex"] + Z[:n0].T @ Z[:n0]
             b = rec["b_ex"] + Z[:n0].T @ Y[:n0]
             brev = fista(G / s, b / s, lam, d1, d2, rec["pilot"], iters=600, tol=1e-8, radius=radius, sizes=sizes)
+            it, cap = 0, False                                       # (FISTA's iterations are not counted)
         else:
             Zs, Ys = np.vstack([rec["Z_ex"], Z[:n0]]), np.concatenate([rec["Y_ex"], Y[:n0]])
             brev, it, cap, _ = proximal_newton(Zs, Ys, lam, d1, d2, rec["pilot"], nb, radius, tol=1e-8, sizes=sizes)
-            nuis_it += it; nuis_cap += int(cap)
+        if cache is not None:
+            cache[(j, n0)] = (brev, it, cap)
+        nuis_it += it; nuis_cap += int(cap)
         if rank_rule is not None:                                    # fold j's pilot data only
             ranks[j] = rank_rule(np.vstack([rec["Z_ex"], Z[:n0]]), np.concatenate([rec["Y_ex"], Y[:n0]]), brev)
         brev, U, V = truncate(brev, d1, d2, ranks[j])

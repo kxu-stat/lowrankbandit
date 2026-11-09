@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
-"""Run one task of the inference experiment: one (block, regime, replicate range), written as one TSV part with one
-row per (replicate, grid point, arm, target).  A part whose file exists with every replicate is skipped; a partial part is
-completed.
+"""Run one task of the inference experiment: one (block, regime, replicate range), written as one gzip-compressed TSV
+part, OUT/parts/KEY.tsv.gz, with one row per (replicate, grid point, arm, target).  A part
+whose file exists with every replicate is skipped; a partial part is completed.
 
     python3 run_inference.py --chunk k --chunks N [--debug] [--out DIR]
 
-The task list is simulation.tasks() (B = 500): per covariate law, I1 5 tasks of 100 replicates, I2l 250 tasks
-of 2 and I1d32 50 tasks of 10, and I3 1 task (611 tasks); --debug runs the small plan simulation.DEBUG_BLOCKS (7 tasks, minutes
-each).  Per replicate: one collection (Step 1) to the block's largest n, then at every n of the grid -- the same run
-stopped at n -- and for every arm of simulation.arms(block): Step 2 once, and Steps 3-4 for every target of the
-design (four targets, D.As; I3 one).  The first target's row is two_track_inference's (every column); the
-others' rows carry the target-independent columns of that row (SHARED) and calibrate_loadings' per-target columns.
-Every row also records the collection's cumulative expected regret at n (algorithms.collection_regret) and the
-target's Cramer-Rao standard error for the collected design (algorithms.cramer_rao: V_CR, kappa_A; with the
-prediction VCR_ratio_pred = sqrt(C_cal kappa_A log n_tr / kappa_hat) of V_pqv / V_CR).  Every row records c_tau,
-c_lam and the package version; a part written by another version is never completed (write to a new --out).  Every
+The task list is simulation.tasks() (B = 1,000): per covariate law, I1 10 tasks of 100 replicates, I2l 500 tasks of
+2 and I1d32 100 tasks of 10, and I3 2 tasks of 500 (1,222 tasks); --debug runs the small plan simulation.DEBUG_BLOCKS
+(7 tasks, minutes each).  Per replicate: one collection (Step 1) to the block's largest n, then at every n of the grid
+-- the same run stopped at n -- and for every arm of simulation.arms(block): Step 2 once, and Steps 3-4 for every
+target of the design (four targets, D.As; I3 one).  An arm whose split and rank rule are an earlier arm's at the same n
+gets that arm's rows (it would compute the same numbers), and the nuisance fits are kept by (fold, n0) for the
+replicate's other n and arms.  The first target's row is two_track_inference's (every column); the others' rows carry
+the target-independent columns of that row (SHARED) and calibrate_loadings' per-target columns.  Every row also
+records the collection's cumulative expected regret at n (algorithms.collection_regret) and the target's Cramer-Rao
+standard error for the collected design (algorithms.cramer_rao: V_CR, kappa_A; with the prediction
+VCR_ratio_pred = sqrt(C_cal kappa_A log n_tr / kappa_hat) of V_pqv / V_CR).  Every row records c_tau, c_lam and the
+version of the computation, CELL_VERSION; a part written under another version is never completed (write to a new
+--out).  Every
 row also carries two numbers of the exploration sample S_o: kappa0_ex, the information per round and coordinate that
 the information rule uses (algorithms.kappa0_exploration), and pilot_rank, the numerical rank of the exploration
 pilot's interaction block.
@@ -26,7 +29,7 @@ exploration pilot, the CV choices, the information rule's kappa0 and the split o
 2-4 can be run again on the same data under any other choice; and the records are the intermediate data of the run
 (a few hundred MB for the whole array).
 """
-import argparse, csv, os, time
+import argparse, csv, gzip, os, time
 from fractions import Fraction
 for _var in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_var, "1")          # one core per process
@@ -35,6 +38,9 @@ import simulation as S
 import algorithms as A
 
 PACKAGE = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "VERSION")).read().split()[0]
+CELL_VERSION = "2.40"    # the version of the computation a part's rows record; it changes only with the computation
+                         # (code that gives the same numbers up to rounding keeps it), so finished parts and records
+                         # stay usable; the records also keep PACKAGE, the package that ran
 
 
 def split(how, N, D, rec):
@@ -66,8 +72,9 @@ def record(D, rec, meta, Ns):
     assert D.K < 128
     arms = S.arms(meta["block"])
     cv = rec["cv"] or [[], []]
-    return dict(block=meta["block"], regime=meta["regime"], rep=meta["rep"], seed=meta["seed"], package=PACKAGE,
-                numpy=np.__version__, tau=rec["tau"], horizon=rec["horizon"], c_lam=str(rec["c_lam"]),
+    return dict(block=meta["block"], regime=meta["regime"], rep=meta["rep"], seed=meta["seed"], package=CELL_VERSION,
+                package_run=PACKAGE, numpy=np.__version__, tau=rec["tau"], horizon=rec["horizon"],
+                c_lam=str(rec["c_lam"]),
                 arm_ex=rec["arm_ex"].astype(np.int8), y_ex=rec["Y_ex"], arm=np.array(rec["arm"], dtype=np.int8),
                 y=np.array(rec["Y"]), pilot=rec["pilot"], score=rec["score"],
                 cv_s=np.array([s for s, _ in cv[0]], dtype=np.int64), cv_c=np.array([[c for _, c in path] for path in cv]),
@@ -84,12 +91,12 @@ def write_record(value, path):
     os.replace(tmp, path)
 
 
-def inference_rows(D, rec, N, how, rule, meta, V_CR, kappa_A, regret):
-    """The rows of one arm at one N: Step 2 once (fold_estimates), then Steps 3-4 for every target of D (the first by
-    two_track_inference, the others by calibrate_loadings with the comparator), each with its Cramer-Rao standard error
-    and the collection's regret."""
+def inference_rows(D, rec, N, how, rule, meta, V_CR, kappa_A, regret, cache=None):
+    """The rows of one arm at one N: Step 2 once (fold_estimates, with the collection's `cache` of nuisance fits), then
+    Steps 3-4 for every target of D (the first by two_track_inference, the others by calibrate_loadings with the
+    comparator), each with its Cramer-Rao standard error and the collection's regret."""
     n0 = split(how, N, D, rec)
-    F = A.fold_estimates(D, rec, N, A.n0_rule(D, rec, N)[0] if n0 is None else n0, rule)
+    F = A.fold_estimates(D, rec, N, A.n0_rule(D, rec, N)[0] if n0 is None else n0, rule, cache)
     o = A.two_track_inference(D, rec, N, A=D.As[0], n0=n0, rank_rule=rule, F=F)
     per = [o] + (A.calibrate_loadings(D, rec, N, D.As[1:], F, comparator=True) if len(D.As) > 1 else [])
     shared = {k: o[k] for k in SHARED}
@@ -121,7 +128,7 @@ def replicate(task, rep, blocks, c_tau, c_lam, records):
             V_CR, kappa_A = A.cramer_rao(D, rec, N, D.As)
             regret = A.collection_regret(rec, N)
             for arm, how in S.arms(block):
-                meta = dict(block=block, regime=regime, rep=rep, arm=arm, seed=sd, c_tau="", package=PACKAGE, **ex)
+                meta = dict(block=block, regime=regime, rep=rep, arm=arm, seed=sd, c_tau="", package=CELL_VERSION, **ex)
                 rows += inference_rows(D, rec, N, how, None, meta, V_CR, kappa_A, regret)
         return rows
     D = S.make_design(block, regime, blocks)
@@ -134,16 +141,22 @@ def replicate(task, rep, blocks, c_tau, c_lam, records):
     ex = dict(kappa0_ex=A.kappa0_exploration(D, rec), pilot_rank=A.pilot_rank(D, rec))
     write_record(record(D, rec, dict(block=block, regime=regime, rep=rep, seed=sd), [n - tau for n in task["n"]]),
                  os.path.join(records, "%s_%s_r%04d.npz" % (block, regime, rep)))
-    rows = []
+    rows, cache = [], {}                                  # cache: the nuisance fits by (fold, n0)
     for n in task["n"]:                                   # the same run, stopped at n
         N = n - tau
         V_CR, kappa_A = A.cramer_rao(D, rec, N, D.As)     # the design's, for every target
         regret = A.collection_regret(rec, N)
+        same = {}                                         # (n0, rank rule) -> the rows of the first such arm
         for arm, how in S.arms(block):
             rule = A.rank_rule(D, S.RANK_ARMS[arm]) if arm in S.RANK_ARMS else None
             meta = dict(block=block, regime=regime, rep=rep, arm=arm, n=n, nb=D.nb, seed=sd, c_tau=c_tau,
-                        package=PACKAGE, t_collect=round(t_collect, 1), **ex)
-            rows += inference_rows(D, rec, N, how, rule, meta, V_CR, kappa_A, regret)
+                        package=CELL_VERSION, t_collect=round(t_collect, 1), **ex)
+            key = (split(how, N, D, rec), S.RANK_ARMS.get(arm))
+            if key[0] is not None and key in same:        # the same split (not the information rule): the same rows
+                rows += [dict(row, arm=arm) for row in same[key]]
+            else:
+                same[key] = inference_rows(D, rec, N, how, rule, meta, V_CR, kappa_A, regret, cache)
+                rows += same[key]
     return rows
 
 
@@ -155,9 +168,10 @@ def provenance():
 
 
 def write_tsv(rows, path):
+    """The part, gzip-compressed, written whole and then renamed, so a stopped task never leaves half a file."""
     keys = list(rows[0].keys())
     tmp = path + ".partial.%d" % os.getpid()
-    with open(tmp, "w", newline="") as f:
+    with gzip.open(tmp, "wt", newline="") as f:
         w = csv.DictWriter(f, fieldnames=keys, delimiter="\t", lineterminator="\n", extrasaction="ignore")
         w.writeheader()
         w.writerows(rows)
@@ -182,18 +196,21 @@ def main():
     os.makedirs(os.path.join(out, "parts"), exist_ok=True)
     records = os.path.join(out, "records")
     os.makedirs(records, exist_ok=True)
-    print("run_inference: tasks %d of %d -> %s (C_ref 1/%g, C_cal %g, c0 1/%g; package %s)" % (
-        len(mine), len(all_tasks), out, 1 / A.C_REF, A.C_CAL, 1 / A.C0, PACKAGE), flush=True)
+    print("run_inference: tasks %d of %d -> %s (C_ref 1/%g, C_cal %g, c0 1/%g; package %s, computation %s)" % (
+        len(mine), len(all_tasks), out, 1 / A.C_REF, A.C_CAL, 1 / A.C0, PACKAGE, CELL_VERSION), flush=True)
     for task in mine:
         c_tau, c_lam, source = S.constants(task["block"])
         print("%s: c_tau %s, c_lam %s (%s)" % (task["key"], c_tau, c_lam, source), flush=True)
-        path = os.path.join(out, "parts", task["key"] + ".tsv")
+        path = os.path.join(out, "parts", task["key"] + ".tsv.gz")
+        if os.path.exists(path[:-3]):               # an uncompressed part of this key: compress, not recompute
+            raise SystemExit("%s exists: compress the parts first, gzip %s/parts/*.tsv" % (path[:-3], out))
         rows, done = [], set()
         if os.path.exists(path):
-            rows = list(csv.DictReader(open(path), delimiter="\t"))
+            with gzip.open(path, "rt", newline="") as f:
+                rows = list(csv.DictReader(f, delimiter="\t"))
             done = {int(r["rep"]) for r in rows}
-            if rows and rows[0].get("package") != PACKAGE:
-                raise SystemExit("%s was written by another package version: write to a new --out" % path)
+            if rows and rows[0].get("package") != CELL_VERSION:
+                raise SystemExit("%s was written under another computation version: write to a new --out" % path)
         for rep in range(task["lo"], task["hi"] + 1):
             if rep in done:
                 continue

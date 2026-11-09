@@ -4,8 +4,10 @@ report.
 
     python3 collect_inference.py [--debug] [--out DIR] [--min-B 50] [--regret-curves G.tsv,B.tsv]
 
-Writes, under OUT/collected/: one merged table per (block, regime) with every replicate row as the array wrote it
-(with its seed), status.tsv (with the count of each task's recorded collections), environment.tsv, summary.tsv
+Reads OUT/parts/KEY.tsv.gz and works through one (block, regime) at a time (the parts and the merged tables are
+gzip-compressed; with B = 1,000 the rows of every table together would take 33-40 GB).  Writes, under OUT/collected/:
+one merged table per (block, regime), BLOCK_REGIME.tsv.gz, with every replicate row as the array wrote it (with its
+seed), status.tsv (with the count of each task's recorded collections), environment.tsv, summary.tsv
 (one row per block, regime, target, arm and grid point), regret.tsv (the two-track collection's cumulative expected
 regret per block, regime and n), vcr.tsv (the Cramer-Rao comparison per block, regime, target and n, the displayed
 choice simulation.PRIMARY, the design-stage split with cap 3/4), targets.tsv (per
@@ -57,7 +59,7 @@ comparison are its rows; every choice is judged by the same standard.  The rank 
 The one-step comparator (the inverse empirical Hessian; standardized by its Monte-Carlo sd, since it has no oracle
 standard error) is in summary.tsv.  With B below --min-B (the debug plan) the checks V1-V4 are n/a.
 """
-import argparse, csv, datetime, glob, os
+import argparse, csv, datetime, glob, gzip, os
 for _var in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_var, "1")          # one core per process
 import numpy as np
@@ -84,7 +86,8 @@ def grade(z):
 
 
 def write_tsv(rows, path):
-    with open(path, "w", newline="") as f:
+    """A table; gzip-compressed when the name ends in .gz (the merged tables)."""
+    with (gzip.open(path, "wt", newline="") if path.endswith(".gz") else open(path, "w", newline="")) as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()), delimiter="\t", lineterminator="\n")
         w.writeheader()
         w.writerows(rows)
@@ -275,8 +278,9 @@ def record_rows(out, block, regime):
 
 
 def regret_tables(merged, curves_paths):
-    """The two-track collection's cumulative expected regret (rows of the displayed choice and the first target: the
-    collection does not depend on the arm or the target), per block, regime and n; and, with the regret
+    """The two-track collection's cumulative expected regret (rows of the displayed choice and the first target, which
+    is what `merged` holds per (block, regime): the collection does not depend on the arm or the target), per
+    block, regime and n; and, with the regret
     study's curves, the ratio to the single-track Algorithm 1 (A_t2) of the same case at the same n: of the total
     regret, and of the regret after the exploration (both runs explore tau rounds; the single track's exploration
     regret is the summary.tsv beside its curves).  Where the regret per round decays like s^(-1/2) the second ratio is
@@ -344,15 +348,16 @@ def main():
     out = a.out or ("inference_debug" if a.debug else "inference_results")
     collected = os.path.join(out, "collected")
     os.makedirs(collected, exist_ok=True)
-    # ---- merge the parts, one table per (block, regime)
-    merged, status = {}, []
+    # ---- completeness of the parts (each part is read again below, with its table)
+    status, keys = [], []
     for task in S.tasks(blocks):
-        path = os.path.join(out, "parts", task["key"] + ".tsv")
+        path = os.path.join(out, "parts", task["key"] + ".tsv.gz")
         reps = set()
         if os.path.exists(path):
-            rows = list(csv.DictReader(open(path), delimiter="\t"))
-            merged.setdefault((task["block"], task["regime"]), []).extend(rows)
-            reps = {int(r["rep"]) for r in rows}
+            with gzip.open(path, "rt", newline="") as f:
+                reps = {int(r["rep"]) for r in csv.DictReader(f, delimiter="\t")}
+            if (task["block"], task["regime"]) not in keys:
+                keys.append((task["block"], task["regime"]))
         expected = task["hi"] - task["lo"] + 1
         records = sum(len(glob.glob(os.path.join(out, "records", "%s_%s_r%04d*.npz" % (task["block"], task["regime"], rep))))
                       for rep in range(task["lo"], task["hi"] + 1))
@@ -364,21 +369,33 @@ def main():
         len(status) - len(bad), sum(s["status"] == "partial" for s in bad), sum(s["status"] == "missing" for s in bad), len(status)))
     for s in bad:
         print("  %-8s %s (%d/%d replicates)" % (s["status"], s["key"], s["replicates"], s["planned"]))
+    if glob.glob(os.path.join(out, "parts", "*.tsv")):
+        print("some parts are not compressed: gzip %s/parts/*.tsv, then collect again" % out)
     print("records: %d collections recorded (OUT/records)" % sum(s["records"] for s in status))
-    for (block, regime), rows in merged.items():
-        write_tsv(rows, os.path.join(collected, "%s_%s.tsv" % (block, regime)))
+    if not keys:
+        return
+    # ---- one (block, regime) at a time (B = 1,000 gives about 4 million rows, 33-40 GB if held at once): its
+    # merged table, gzip-compressed, and its records table; then its summaries per (target, arm, grid point) and the
+    # standard on every choice of n0 and target
+    table, verdicts, md_arms, md_n0, md_rank, consts, md_vcr, vcr_rows = [], {}, [], [], [], [], [], []
+    target_rows = []                                     # targets.tsv: each target's truth at the largest n
+    seen, regret_rows = set(), {}                        # the versions seen; the rows the regret tables use
+    for block, regime in sorted(keys):
+        rows_all = []
+        for task in S.tasks(blocks):
+            path = os.path.join(out, "parts", task["key"] + ".tsv.gz")
+            if (task["block"], task["regime"]) == (block, regime) and os.path.exists(path):
+                with gzip.open(path, "rt", newline="") as f:
+                    rows_all += list(csv.DictReader(f, delimiter="\t"))
+        write_tsv(rows_all, os.path.join(collected, "%s_%s.tsv.gz" % (block, regime)))
         rec_rows = record_rows(out, block, regime)
         if rec_rows:
             write_tsv(rec_rows, os.path.join(collected, "records_%s_%s.tsv" % (block, regime)))
-    seen = sorted({tuple(r.get(k, "") for k in ("python", "numpy", "scipy")) for rows in merged.values() for r in rows})
-    if seen and any(v[0] for v in seen):              # provenance: the versions the replicates were computed with
-        write_tsv([dict(zip(("python", "numpy", "scipy"), v)) for v in seen if v[0]], os.path.join(collected, "environment.tsv"))
-    if not merged:
-        return
-    # ---- per (block, regime, target, arm, grid point) summaries; the standard on every choice of n0 and target
-    table, verdicts, md_arms, md_n0, md_rank, consts, md_vcr, vcr_rows = [], {}, [], [], [], [], [], []
-    target_rows = []                                     # targets.tsv: each target's truth at the largest n
-    for (block, regime), rows_all in sorted(merged.items()):
+        seen |= {tuple(r.get(k, "") for k in ("python", "numpy", "scipy")) for r in rows_all}
+        first = targets_of(rows_all)[0]                  # the collection's regret: the displayed choice, first target
+        kept = [r for r in rows_all if r["arm"] == S.PRIMARY and r["target"] == first]
+        if kept:
+            regret_rows[(block, regime)] = kept
         law = block if regime in ("lowrank", "tie") else "%s (%s)" % (block, regime)   # one entry per covariate law
         used = sorted({(r.get("c_tau", "?") or "tie: %d rounds" % S.TIE_TAU, r.get("c_lam", "?")) for r in rows_all})
         consts.append("%s: c_tau %s, c_lam %s" % (law, " / ".join(u[0] for u in used), " / ".join(u[1] for u in used)))
@@ -438,6 +455,9 @@ def main():
                 vcr_rows += [dict(block=block, regime=regime, target=target, n=s["n"], B=s["B"], VCR_ratio=s["VCR_ratio"],
                                   se_VCR_ratio=s["se_VCR_ratio"], VCR_ratio_pred=s["VCR_ratio_pred"], kappa_A=s["kappa_A"],
                                   kap_hat=s["kap_hat"], V_CR=s["V_CR"], PT_A=s["PT_A"]) for s in known.values()]
+    seen = sorted(seen)
+    if seen and any(v[0] for v in seen):              # provenance: the versions the replicates were computed with
+        write_tsv([dict(zip(("python", "numpy", "scipy"), v)) for v in seen if v[0]], os.path.join(collected, "environment.tsv"))
     write_tsv(table, os.path.join(collected, "summary.tsv"))
     if target_rows:
         write_tsv(target_rows, os.path.join(collected, "targets.tsv"))
@@ -456,7 +476,7 @@ def main():
             "DEBUG with a note: a structural check (caps or completeness) is not PASS -- see the tables"), ""]
     md = ["# Inference experiment: verification", "",
           "Generated %s by collect_inference.py from %d tables in `%s`." % (
-              datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), len(merged), collected), "", *debug_line,
+              datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), len(keys), collected), "", *debug_line,
           "## Verdicts by choice of n0 (the same standard for every choice)", "", *verdict_table, "",
           "Columns: %s." % "; ".join("%s = %s" % (SHORT[c], LABEL[c]) for c in cols), "",
           "Constants: C_ref 1/%g, C_cal %g; c0 1/%g in both splits (the information rule and the design-stage split); "
@@ -479,7 +499,7 @@ def main():
                "and the tangent space known (algorithms.cramer_rao; offline).  The prediction from the variance expansion "
                "of the theorem is V_pqv / V_CR = sqrt(C_cal kappa_A log n_tr / kappa_hat): the sqrt(log n) price of the "
                "predictable calibration.  Descriptive.", "", *md_vcr]
-    reg, comp = regret_tables(merged, a.regret_curves or [])
+    reg, comp = regret_tables(regret_rows, a.regret_curves or [])
     if reg:
         write_tsv(reg, os.path.join(collected, "regret.tsv"))
         md += ["## The regret of the two-track collection", "",

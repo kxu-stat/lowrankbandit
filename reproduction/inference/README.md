@@ -15,7 +15,7 @@ rounds in turn.  Every choice of the split n0 runs on the same collections and i
 | `figures_inference.py` | the figures (its docstring lists them) |
 | `check_inference.py` | a health check of a collected run (judges nothing) |
 | `tie_ablation.py`, `ablation_step3.py`, `figure_ablation.py` | the ablation of Step 3: Algorithm 2 against the one-step debiasing of the policy's own estimator, whole sample and cross-fitted, on the same collections |
-| `submit_*.sge`, `notify.sge` | the cluster jobs (`../RUNNING.md`) |
+| `submit_*.sge`, `notify.sge` | the cluster jobs, the collect among them (`../RUNNING.md`) |
 
 ## Design
 
@@ -30,7 +30,7 @@ sphere or N(0, I):
 | I1d32 | Gaussian, d1 = d2 = 32 | 1,000 to 10,000 |
 | I3 | the scalar design with frequent ties (appendix) | 50 to 12,800 after the exploration |
 
-500 replicates per block; one run per replicate to the block's largest n, evaluated at every n.  The collection uses
+1,000 replicates per block; one run per replicate to the block's largest n, evaluated at every n.  The collection uses
 the regret study's exploration length (c_tau = 1/20) and penalty (cross-validated in each track); I3 has its own.
 The choices of n0: the design-stage split with cap 3/4 (`design_75`, displayed) and 0.9, the information rule
 (`info_rule`), the fixed shares 0.1, 0.3, 0.5, 0.7, 0.9 of a track, and no refit (`no_refit`, for comparison); the
@@ -39,9 +39,10 @@ loading, the two entries with the largest and smallest tangent part, and a rank-
 
 ## Output
 
-`inference_results/parts/`: one row per (replicate, n, choice of n0, target) with its seed, mu, the standard errors,
-the true value and the exact decomposition of mu - mu*; `inference_results/records/`: every collection;
-`inference_results/collected/`: the tables, among them the verification standard for every choice.  T is
-standardized by the oracle standard error (the predictable quadratic variation with the true variance).
-`figures/ARM/`: the figures of one choice of n0 (default `design_75`); `inference_trend` and `inference_qq` are the
-main text's.  The ablation writes `ablation_results/`, with `ablation_tie_hist` for the main text.
+`inference_results/parts/` (gzip-compressed): one row per (replicate, n, choice of n0, target) with its seed, mu, the
+standard errors, the true value and the exact decomposition of mu - mu*; `inference_results/records/`: every
+collection; `inference_results/collected/`: the merged tables (gzip-compressed) and the summaries, among them the
+verification standard for every choice.  T is standardized by the oracle standard error (the predictable quadratic
+variation with the true variance).  `figures/ARM/`: the figures of one choice of n0 (default `design_75`);
+`inference_trend` and `inference_qq` are the main text's.  The ablation writes `ablation_results/tie`
+(`ablation_tie_hist`, the main text's) and `ablation_results/appendix`.

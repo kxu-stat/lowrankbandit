@@ -7,7 +7,9 @@ each main-effect group in a Euclidean ball and Theta in a Frobenius ball, radius
 radius None there is no domain.  Gaussian family: FISTA with adaptive restart.  Binomial family: proximal Newton
 (each step a FISTA solve of the quadratic model, Armijo backtracking).
 """
+import math
 import numpy as np
+from scipy.linalg import lapack
 from .model import sigmoid, softplus, variance_function, vec
 
 
@@ -16,19 +18,32 @@ def top_eigenvalue(G):
     return float(np.linalg.eigvalsh(G)[-1])
 
 
+def norm2(v):
+    """The Euclidean norm of a vector: np.linalg.norm(v) without its overhead, which counts in the solvers' loops."""
+    return math.sqrt(v.dot(v))
+
+
+def svd(M):
+    """The thin SVD M = U diag(s) Vt by LAPACK's dgesdd: what np.linalg.svd computes, without its overhead."""
+    U, s, Vt, info = lapack.dgesdd(M, full_matrices=0)
+    if info != 0:
+        raise np.linalg.LinAlgError("the SVD did not converge")
+    return U, s, Vt
+
+
 def nuclear_norm(theta, d1, d2):
     p0 = theta.size - d1 * d2
-    return float(np.linalg.svd(theta[p0:].reshape(d1, d2, order="F"), compute_uv=False).sum())
+    return float(svd(theta[p0:].reshape(d1, d2, order="F"))[1].sum())
 
 
 def prox(u, step, lam, d1, d2, radius=None, sizes=None):
     """Proximal map of step * lam ||Theta||_* on C_R: the singular values of the interaction block are soft-thresholded
     at step * lam and scaled into the Frobenius ball; each main-effect group is projected onto its ball."""
     p0 = u.size - d1 * d2
-    Uu, sv, Vt = np.linalg.svd(u[p0:].reshape(d1, d2, order="F"), full_matrices=False)
+    Uu, sv, Vt = svd(u[p0:].reshape(d1, d2, order="F"))
     sv = np.maximum(sv - step * lam, 0.0)
     if radius is not None and radius[-1] is not None:
-        norm = np.linalg.norm(sv)
+        norm = norm2(sv)
         if norm > radius[-1]:
             sv = sv * (radius[-1] / norm)
     inter = vec((Uu * sv) @ Vt)
@@ -40,7 +55,7 @@ def prox(u, step, lam, d1, d2, radius=None, sizes=None):
     for g, size in enumerate(sizes):
         block = u[start:start + size].copy()
         if radius is not None and radius[g] is not None:
-            norm = np.linalg.norm(block)
+            norm = norm2(block)
             if norm > radius[g]:
                 block = block * (radius[g] / norm)
         blocks.append(block)
@@ -59,11 +74,11 @@ def fista(G, b, lam, d1, d2, x0, L=None, iters=400, tol=1e-6, radius=None, sizes
     tk = 1.0
     for _ in range(iters):
         xn = prox(y - (G @ y - b) / L, 1.0 / L, lam, d1, d2, radius, sizes)
-        if np.linalg.norm(L * (y - xn)) <= tol * max(1.0, L * np.linalg.norm(xn)):
+        if norm2(L * (y - xn)) <= tol * max(1.0, L * norm2(xn)):
             return xn
         if np.dot(y - xn, xn - x) > 0:
             tk = 1.0                                              # adaptive restart
-        tn = (1.0 + np.sqrt(1.0 + 4.0 * tk * tk)) / 2.0
+        tn = (1.0 + math.sqrt(1.0 + 4.0 * tk * tk)) / 2.0
         y = xn + ((tk - 1.0) / tn) * (xn - x)
         x, tk = xn, tn
     return x
@@ -79,16 +94,18 @@ def proximal_newton(Z, y, lam, d1, d2, x0, trials, radius=None, H=None, LH=None,
         L_max = 0.25 * trials * top_eigenvalue(Z.T @ Z / s)
     L_max = max(L_max, 1e-12)
 
-    def objective(v, u):
-        return float(np.mean(trials * softplus(u) - y * u)) + lam * nuclear_norm(v, d1, d2)
+    def objective(u, nuc):                              # u = Z x, nuc = ||Theta(x)||_*
+        return float(np.mean(trials * softplus(u) - y * u)) + lam * nuc
 
     x = x0.copy()
     u = Z @ x
+    nuc = nuclear_norm(x, d1, d2)
+    f = objective(u, nuc)                               # u, nuc and f go with x: each computed once per point
     refresh, res_old = H is None, np.inf
     for it in range(1, iters + 1):
         g = Z.T @ (trials * sigmoid(u) - y) / s
         xp = prox(x - g / L_max, 1.0 / L_max, lam, d1, d2, radius, sizes)
-        res = np.linalg.norm(L_max * (x - xp)) / max(1.0, L_max * np.linalg.norm(xp))
+        res = norm2(L_max * (x - xp)) / max(1.0, L_max * norm2(xp))
         if res <= tol:
             return xp
         refresh = refresh or res > 0.5 * res_old or it > 8
@@ -102,14 +119,15 @@ def proximal_newton(Z, y, lam, d1, d2, x0, trials, radius=None, H=None, LH=None,
         v = fista(H, H @ x - g, lam, d1, d2, x, L=LH, iters=inner_iters, tol=max(inner_tol, 0.1 * res),
                   radius=radius, sizes=sizes)
         step = v - x
-        fx = objective(x, u)
-        model = float(g @ step) + lam * (nuclear_norm(v, d1, d2) - nuclear_norm(x, d1, d2))
-        alpha, xn, un = 1.0, v, Z @ v
-        while objective(xn, un) > fx + 1e-4 * alpha * model and alpha > 1e-3:
+        alpha, xn, un, nucn = 1.0, v, Z @ v, nuclear_norm(v, d1, d2)
+        model = float(g @ step) + lam * (nucn - nuc)
+        fn = objective(un, nucn)
+        while fn > f + 1e-4 * alpha * model and alpha > 1e-3:
             alpha *= 0.5
             xn = x + alpha * step
-            un = Z @ xn
-        x, u = xn, un
+            un, nucn = Z @ xn, nuclear_norm(xn, d1, d2)
+            fn = objective(un, nucn)
+        x, u, nuc, f = xn, un, nucn, fn
         refresh = alpha < 1.0
     g = Z.T @ (trials * sigmoid(u) - y) / s
     return prox(x - g / L_max, 1.0 / L_max, lam, d1, d2, radius, sizes)

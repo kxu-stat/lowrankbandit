@@ -1,22 +1,22 @@
 #!/bin/bash
-# MIND inference: 500 streams of the down-sampled world
-# (every log-odds plus log 4; the main text) and 500 of the main world, each collected to 80,000 rounds, rounds drawn
-# with replacement, Algorithm 2 (C_ref = 1/15) at n = 10,000, 20,000,
-# 30,000, 40,000, 60,000, 80,000 for every choice of n0 (displayed: the design-stage split, cap 3/4) and the 32
-# targets of the setup file.  Every stream's npz also keeps its seed, the arms played and the clicks, from which
-# the stream is regenerated.
-# One task = one stream of one world: 1,000 tasks (about 70 minutes per stream in the main world and 95
-# in the down-sampled one; under 1 GB; about 1,400 CPU-h in all).
+# MIND inference: 1,000 streams of the down-sampled world (every log-odds plus log 4; the main text) and 1,000 of the
+# main world, each collected to 80,000 rounds, rounds drawn with replacement, Algorithm 2 (C_ref = 1/15) at n = 10,000,
+# 20,000, 30,000, 40,000, 60,000, 80,000 for every choice of n0 (displayed: the design-stage split, cap 3/4) and the 32
+# targets of the setup file.  Every stream's npz also keeps its seed, the arms played and the clicks, from which the
+# stream is regenerated; the cell is cells/KEY.json.gz.
+# One task = one stream of one world: 2,000 tasks, stream b of main and of down4 in turn (b = 1-1,000); tasks
+# 1,001-2,000 are streams 501-1,000 (submit_mind_inference_more.sge runs them alone).  About 42 minutes per stream in
+# the main world and 48 in the down-sampled one; under 1 GB; about 1,500 CPU-h in all.
 # Submit:  JOBID=$(qsub -terse submit_mind_inference_eval.sge | cut -d. -f1); qsub -hold_jid $JOBID notify_mind.sge
 # Resubmitting finishes an interrupted run (a finished stream is skipped).
-# Then:    python3 collect_mind_inference.py evaluation --setup data/mind_setup_D16.npz
+# Then:    qsub submit_collect_mind_inference.sge
 #$ -pe smp 1
 #$ -q long
 #$ -N mind_inf_eval
-#$ -t 1-1000
+#$ -t 1-2000
 #$ -tc 110
 #$ -r n
 
 module load python/3.12.15
 cd $SGE_O_WORKDIR
-python3 run_mind_inference.py evaluation --setup data/mind_setup_D16.npz --chunk $SGE_TASK_ID --chunks 1000
+python3 run_mind_inference.py evaluation --setup data/mind_setup_D16.npz --chunk $SGE_TASK_ID --chunks 2000

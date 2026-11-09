@@ -8,7 +8,7 @@
 """
 import numpy as np
 from .model import mean_function, softplus
-from .estimator import fista, proximal_newton, top_eigenvalue
+from .estimator import fista, proximal_newton, top_eigenvalue, norm2
 
 C_TAU = 1 / 20
 CV_GRID = (1.0, 1 / 2, 1 / 4, 1 / 8, 1 / 16, 1 / 32, 1 / 64)   # largest first: each fit starts at the previous one
@@ -32,11 +32,11 @@ def main_only_fit(C, y, family, trials, radii=None, sizes=None, tol=1e-10, maxit
         if radii is not None:
             start = 0
             for size, R in zip(sizes, radii):
-                norm = np.linalg.norm(new[start:start + size])
+                norm = norm2(new[start:start + size])
                 if R is not None and norm > R:
                     new[start:start + size] *= R / norm
                 start += size
-        if np.linalg.norm(new - gamma) <= tol * max(1.0, np.linalg.norm(new)):
+        if norm2(new - gamma) <= tol * max(1.0, norm2(new)):
             return new
         gamma = new
     raise RuntimeError("the main-effects-only fit on the exploration rows did not converge: under the binomial family "
@@ -83,12 +83,15 @@ def cv_constant(Z, y, base, start, d1, d2, family, trials, radius=None, sizes=No
         train, test = fold != f, fold == f
         Zt, yt = Z[train], y[train]
         s = len(yt)
+        G, b = Zt.T @ Zt / s, Zt.T @ yt / s                    # the same for every c: computed once per fold
+        L = top_eigenvalue(G)
         x = start
         for k, c in enumerate(CV_GRID):
             if family == "gaussian":
-                x = fista(Zt.T @ Zt / s, Zt.T @ yt / s, c * base(s), d1, d2, x, radius=radius, sizes=sizes)
+                x = fista(G, b, c * base(s), d1, d2, x, L=L, radius=radius, sizes=sizes)
             else:
-                x = proximal_newton(Zt, yt, c * base(s), d1, d2, x, trials, radius, sizes=sizes)
+                x = proximal_newton(Zt, yt, c * base(s), d1, d2, x, trials, radius, L_max=0.25 * trials * L,
+                                    sizes=sizes)
             u = Z[test] @ x
             if family == "gaussian":
                 loss[k] += np.sum((y[test] - u) ** 2)

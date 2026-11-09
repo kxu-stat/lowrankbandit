@@ -1,9 +1,9 @@
 #!/bin/bash
-# The ablation of Step 3, the main text's figure: the adaptive-tie design I3 at
-# N = 10,000 post-exploration rounds, replicates 1-1,000, collected from the package's seeds (74,000,000 + 100,000 rep
-# + N; the inference run's grid has no N = 10,000), and Step 3 in seven versions on each collection (tie_ablation.py;
-# Algorithm 2 against the one-step debiasing of the policy's estimator, whole sample and cross-fitted).  10 tasks of
-# 100 replicates, about 4 minutes each; it needs no other array.
+# The ablation of Step 3, the main text's figure: the adaptive-tie design I3 at N = 10,000 post-exploration rounds,
+# replicates 1-1,000, collected from the package's seeds (74,000,000 + 100,000 rep + N; the inference run's grid has no
+# N = 10,000), and Step 3 in seven versions on each collection (tie_ablation.py; Algorithm 2 against the one-step
+# debiasing of the policy's estimator, whole sample and cross-fitted).  10 tasks of 100 replicates, about 4 minutes
+# each; it needs no other array.
 # Submit:  qsub submit_tie_ablation.sge
 # A task appends one replicate at a time and skips the replicates its part has, so resubmitting finishes a stopped run.
 # Then:    python3 figure_ablation.py ablation_results/tie --blocks "" --name ablation_tie

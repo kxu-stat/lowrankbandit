@@ -1,0 +1,15 @@
+#!/bin/bash
+# The collect of the MIND inference as a job on a compute node: it holds one world's rows at once, about 3.3 GB for the
+# 1,000 streams of a world, too much for a login node (one core of a node of 256 GB for 24 cores has about 10 GB).
+# About 10-15 minutes.  Writes mind_inference_evaluation/collected/ (status.tsv, reported_n.md with the tolerance
+# |mean T| < 0.1, each world's tables and figures) and prints, in collect_mind.o<jobid>, "evaluation: 2000 streams
+# planned, 2000 ok" and the table of the reported n.
+# Submit (from realdata/, after the array has finished):  qsub submit_collect_mind_inference.sge
+#$ -pe smp 1
+#$ -q long
+#$ -N collect_mind
+#$ -r n
+
+module load python/3.12.15
+cd $SGE_O_WORKDIR
+python3 collect_mind_inference.py evaluation --setup data/mind_setup_D16.npz

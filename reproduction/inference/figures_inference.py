@@ -33,7 +33,7 @@ Every CLT quantity is under the oracle standard error: T = (mu_hat - mu*) / V_pq
 mu_hat +- 1.96 V_pqv; the procedure's V_hat appears only in the variance figure.  Rows are labeled by the model,
 not by the block codes I1 / I2l, and B is left to the captions.
 """
-import argparse, csv, glob, os
+import argparse, csv, glob, gzip, os
 for _var in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_var, "1")          # one core per process
 import numpy as np
@@ -55,6 +55,8 @@ PARTS = (("taylor", "#e08a3c"), ("normal", "#2a78d6"), ("calibration", "#8a8983"
 OURS, OLS, BLUE = "#1a1a19", "#8a8983", "#2a78d6"
 INK2, GRID = "#52514e", "#e6e5e1"
 Z95 = 1.959964
+COLUMNS = ("arm", "target", "n", "N", "mu", "mu_star", "V", "V_pqv", "r_tay", "r_norA", "r_norz", "r_cal", "mu_ols",
+           "r0", "rank_0", "rank_1", "VCR_ratio", "VCR_ratio_pred")   # the columns the figures use (load keeps these)
 
 plt.rcParams.update({
     "font.family": "sans-serif", "font.sans-serif": ["Helvetica", "Arial", "Liberation Sans", "DejaVu Sans"],
@@ -65,27 +67,34 @@ plt.rcParams.update({
 })
 
 
-def load(collected, regime="lowrank", arm=S.PRIMARY, target="dense"):
+def load(collected, regime="lowrank", arm=S.PRIMARY, target="dense", only_arm=False):
     """{block: rows of the arm} and {block: rows of every arm} of one covariate regime and target (the tie design I3
     goes with `lowrank`; its arm is the same choice when it runs it, otherwise the displayed one, and it has one
-    target), fields numeric.  target None: every target (the figure `targets`)."""
+    target), fields numeric.  target None: every target (the figure `targets`).  only_arm: keep the arm's rows alone.
+    The tables (BLOCK_REGIME.tsv.gz) are read row by row, and only the rows kept and of them only COLUMNS are held
+    (a table of B = 1,000 replicates has about a million rows of 109 columns)."""
     chosen, every = {}, {}
-    paths = glob.glob(os.path.join(collected, "I*_%s.tsv" % regime))
+    paths = glob.glob(os.path.join(collected, "I*_%s.tsv.gz" % regime))
     if regime == "lowrank":
-        paths += glob.glob(os.path.join(collected, "I3_tie.tsv"))
+        paths += glob.glob(os.path.join(collected, "I3_tie.tsv.gz"))
     for path in sorted(paths):
         block = os.path.basename(path).split("_")[0]
-        rows = list(csv.DictReader(open(path), delimiter="\t"))
-        if block != "I3" and target is not None:
-            rows = [r for r in rows if r["target"] == target]
-        for r in rows:
-            for k, v in r.items():
-                try:
-                    r[k] = float(v)
-                except (ValueError, TypeError):
-                    pass
-        every[block] = rows
         own = arm if block != "I3" or arm in dict(S.arms("I3")) else S.PRIMARY
+        rows = []
+        with gzip.open(path, "rt", newline="") as f:
+            for r in csv.DictReader(f, delimiter="\t"):
+                if block != "I3" and target is not None and r["target"] != target:
+                    continue
+                if only_arm and r["arm"] != own:
+                    continue
+                r = {k: r[k] for k in COLUMNS if k in r}
+                for k, v in r.items():
+                    try:
+                        r[k] = float(v)
+                    except (ValueError, TypeError):
+                        pass
+                rows.append(r)
+        every[block] = rows
         chosen[block] = [r for r in rows if r["arm"] == own]
     return chosen, every
 
@@ -467,7 +476,7 @@ def targets(collected, regime, arm, out):
     """The four targets under one choice of n0, one row per block: |total remainder| / V_pqv (log scale, lines
     at 0.03 and 0.05), sd T (+- 2 se), oracle coverage (0.95 +- 2 se), and V_pqv / V_CR with the theorem's
     prediction sqrt(C_cal kappa_A log n_tr / kappa_hat) dashed."""
-    _, every = load(collected, regime, arm, target=None)
+    _, every = load(collected, regime, arm, target=None, only_arm=True)
     blocks = [b for b in BLOCKS if b in every and any("target" in r for r in every[b])]
     if not blocks:
         return

@@ -1,0 +1,16 @@
+#!/bin/bash
+# The collect of the inference simulations as a job on a compute node: about 4 million rows at B = 1,000, read one
+# (block, regime) at a time; the largest, I2l under one covariate law, holds about 1.05 million rows (about 8 KB a row
+# in Python: 9-10 GB), so it asks for two cores of a node (on a node of 256 GB for 24 cores, about 21 GB).  About
+# 15-30 minutes.  Writes inference_results/collected/ (the merged tables BLOCK_REGIME.tsv.gz, status.tsv, summary.tsv,
+# regret.tsv, vcr.tsv, targets.tsv, records_*.tsv, regret_vs_single.tsv and inference_verdict.md) and prints, in
+# collect_inf.o<jobid>, "tasks: 1222 complete, 0 partial, 0 missing of 1222".
+# Submit (from inference/, after the array has finished):  qsub submit_collect_inference.sge
+#$ -pe smp 2
+#$ -q long
+#$ -N collect_inf
+#$ -r n
+
+module load python/3.12.15
+cd $SGE_O_WORKDIR
+python3 collect_inference.py --regret-curves ../regret/regret_gaussian/collected/regret_curves.tsv,../regret/regret_binomial/collected/regret_curves.tsv

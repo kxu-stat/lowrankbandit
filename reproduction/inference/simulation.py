@@ -20,11 +20,11 @@ constant chosen inside each track by 10-fold cross-validation (algorithms.collec
 own 12 exploration rounds and c_lam = 1/16.
 
 Blocks, in total rounds n = tau + N; one collection per replicate to the block's horizon, every smaller n is the same
-run stopped at n:
-  I1     identity link, rho = 0.2, n from 500 to 10000 (14 points), B = 500;
-  I2l    logistic rewards (nb = 1), n from 1000 to 60000 (24 points), B = 500;
-  I1d32  identity link, rho = 0.2, d1 = d2 = 32 (p = 1024, p_T = 124), n from 1000 to 10000 (8 points), B = 500;
-  I3     the adaptive-tie design (d1 = d2 = 1, K = 2); post-exploration rounds N from 50 to 12800, B = 500.
+run stopped at n (B = 1,000 replicates in every block, as many as the MIND inference's streams):
+  I1     identity link, rho = 0.2, n from 500 to 10000 (14 points), B = 1,000;
+  I2l    logistic rewards (nb = 1), n from 1000 to 60000 (24 points), B = 1,000;
+  I1d32  identity link, rho = 0.2, d1 = d2 = 32 (p = 1024, p_T = 124), n from 1000 to 10000 (8 points), B = 1,000;
+  I3     the adaptive-tie design (d1 = d2 = 1, K = 2); post-exploration rounds N from 50 to 12800, B = 1,000.
 
 Targets (`targets`; every ||A_Theta||_F = 1): dense, U J V' / sqrt(d1 d2); entry_max and entry_min, the entries
 e_i e_j' with the largest and the smallest tangent projection; rank1, a random rank-one loading of median tangent
@@ -53,12 +53,12 @@ def constants(block):
 
 TOTALS = (1000, 1500, 2000, 2500, 3000, 3500, 4000, 5000, 6000, 7000, 8000, 9000, 10000)
 BLOCKS = {  # block: family, nb, grid (n = total rounds; I3: N = post-exploration), B, replicates per task, d
-    "I1":  dict(family="gaussian", nb=1,  n=(500,) + TOTALS, B=500, chunk=100),
+    "I1":  dict(family="gaussian", nb=1,  n=(500,) + TOTALS, B=1000, chunk=100),
     "I2l": dict(family="binomial", nb=1,  n=TOTALS + (12000, 14000, 16000, 18000, 20000, 25000, 30000, 35000, 40000,
-                                                     50000, 60000), B=500, chunk=2),
+                                                     50000, 60000), B=1000, chunk=2),
     "I3":  dict(family="gaussian", nb=1,  N=(50, 100, 150, 200, 300, 400, 600, 800, 1200, 1600,
-                                            2400, 3200, 4800, 6400, 12800), B=500, chunk=500),
-    "I1d32": dict(family="gaussian", nb=1, d=32, n=(1000, 1500, 2000, 3000, 4000, 6000, 8000, 10000), B=500, chunk=10),
+                                            2400, 3200, 4800, 6400, 12800), B=1000, chunk=500),
+    "I1d32": dict(family="gaussian", nb=1, d=32, n=(1000, 1500, 2000, 3000, 4000, 6000, 8000, 10000), B=1000, chunk=10),
 }
 DEBUG_BLOCKS = {  # the same runners on a few replicates: exercises the pipeline, claims nothing
     "I1":  dict(family="gaussian", nb=1,  n=(500, 1000), B=2, chunk=2),

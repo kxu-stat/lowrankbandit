@@ -1,0 +1,19 @@
+#!/bin/bash
+# MIND inference, streams 501-1,000 of each world: tasks 1,001-2,000 of submit_mind_inference_eval.sge (stream b of the
+# main world and of the down-sampled world in turn, seeds 44,000,501-44,001,000; stream b has the same seed in both
+# worlds), for a run whose streams 1-500 are computed already (their cells in mind_inference_evaluation/cells/ are
+# reused).  1,000 tasks, at most 110 at once: about 42 minutes per main-world stream and 48 per down-sampled stream,
+# about 750 CPU-h, about 7 hours when the queue is free; under 1 GB a task.
+# Submit:  JOBID=$(qsub -terse submit_mind_inference_more.sge | cut -d. -f1); qsub -hold_jid $JOBID notify_mind.sge
+# Resubmitting finishes an interrupted run (a finished stream is skipped).
+# Then:    qsub submit_collect_mind_inference.sge
+#$ -pe smp 1
+#$ -q long
+#$ -N mind_inf_more
+#$ -t 1001-2000
+#$ -tc 110
+#$ -r n
+
+module load python/3.12.15
+cd $SGE_O_WORKDIR
+python3 run_mind_inference.py evaluation --setup data/mind_setup_D16.npz --chunk $SGE_TASK_ID --chunks 2000

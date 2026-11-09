@@ -14,7 +14,8 @@ For each world (main, down4) it prints:
      whose oracle coverage at the largest n is below 0.90;
 and then the reported n of both worlds (collected/reported_n.md).
 It judges nothing: the verification standard is applied by the collect (collected/WORLD/verdict_mind_inference.md).
-Only the Python standard library is used; the rows are read one at a time (a world has about 864,000).
+Only the Python standard library is used; the rows are read one at a time (a world of 1,000 streams has 1,728,000:
+about 35 seconds and 0.1 GB).
 """
 import csv
 import gzip

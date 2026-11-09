@@ -45,17 +45,20 @@ collector <- function(n_tracks, d1, d2, horizon, family = "gaussian", trials = 1
   pilot <- NULL
   base <- NULL
   # the tracks, filled in when the exploration ends:
-  #   Z, y     the rows S_o followed by the track's own rounds;  k  the track's rounds so far;  arm  its arms
+  #   Zs[[j]], ys[[j]]   the rows S_o followed by track j's own rounds (kept apart from `tracks`, so that observe()
+  #            writes the new row in place: a matrix inside a copied list would be copied every round)
+  #   k        the track's rounds so far;  arm  its arms
   #   theta    the track's current estimate, fitted on s_fit rows
   #   G, b     sum z z' and sum y z over the track's rows (the Gaussian fit needs only these)
   #   c, cv    the penalty constant in force and the cross-validation choices (rows s, c)
   #   L, H, LH, s_H   solver caches: the top eigenvalue of G / s (every round up to k = 200, then every tenth), the
   #            curvature-weighted Gram matrix (binomial; rebuilt exactly when s has grown by a quarter since s_H,
   #            updated row by row in between) and its top eigenvalue
-  new_track <- function() list(Z = NULL, y = NULL, k = 0, arm = integer(n_tr), theta = NULL, s_fit = 0, G = NULL,
-                               b = NULL, c = NULL, cv = matrix(numeric(0), 0, 2), L = NULL, H = NULL, LH = NULL,
-                               s_H = 0)
+  new_track <- function() list(k = 0, arm = integer(n_tr), theta = NULL, s_fit = 0, G = NULL, b = NULL, c = NULL,
+                               cv = matrix(numeric(0), 0, 2), L = NULL, H = NULL, LH = NULL, s_H = 0)
   tracks <- lapply(seq_len(n_tracks), function(j) new_track())
+  Zs <- NULL
+  ys <- NULL
 
   fit_pilot <- function() {
     score <<- pilot_score(Z_ex, y_ex, d1, d2, family, trials, radius, sizes)
@@ -73,9 +76,9 @@ collector <- function(n_tracks, d1, d2, horizon, family = "gaussian", trials = 1
       tracks[[j]]$c <<- c0
       tracks[[j]]$G <<- G_ex
       tracks[[j]]$b <<- b_ex
-      tracks[[j]]$Z <<- rbind(Z_ex, matrix(0, n_tr, p))
-      tracks[[j]]$y <<- c(y_ex, numeric(n_tr))
     }
+    Zs <<- lapply(seq_len(n_tracks), function(j) rbind(Z_ex, matrix(0, n_tr, p)))
+    ys <<- lapply(seq_len(n_tracks), function(j) c(y_ex, numeric(n_tr)))
   }
 
   refit <- function(j, s) {                                      # track j's estimate on its s = tau + k rows
@@ -85,8 +88,8 @@ collector <- function(n_tracks, d1, d2, horizon, family = "gaussian", trials = 1
     k <- s - tau
     rows <- seq_len(s)
     if (cv && s %in% checkpoints) {                              # choose c again on the track's rows
-      tr$c <- cv_constant(tr$Z[rows, , drop = FALSE], tr$y[rows], base, tr$theta, d1, d2, family, trials, radius,
-                          sizes)
+      tr$c <- cv_constant(Zs[[j]][rows, , drop = FALSE], ys[[j]][rows], base, tr$theta, d1, d2, family, trials,
+                          radius, sizes)
       tr$cv <- rbind(tr$cv, c(s, tr$c))
     }
     lam <- tr$c * base(s)
@@ -94,14 +97,14 @@ collector <- function(n_tracks, d1, d2, horizon, family = "gaussian", trials = 1
     if (family == "gaussian") {
       tr$theta <- fista(tr$G / s, tr$b / s, lam, d1, d2, tr$theta, L = tr$L, radius = radius, sizes = sizes)
     } else {
-      Z <- tr$Z[rows, , drop = FALSE]
+      Z <- Zs[[j]][rows, , drop = FALSE]
       if (s >= 1.25 * tr$s_H) {                                # exact curvature-weighted Gram, now and then
         w <- variance_function(as.vector(Z %*% tr$theta), family, trials)
         tr$H <- crossprod(Z, Z * w)
         tr$s_H <- s
         tr$LH <- top_eigenvalue(tr$H / s)
       }
-      tr$theta <- proximal_newton(Z, tr$y[rows], lam, d1, d2, tr$theta, trials, radius, H = tr$H / s, LH = tr$LH,
+      tr$theta <- proximal_newton(Z, ys[[j]][rows], lam, d1, d2, tr$theta, trials, radius, H = tr$H / s, LH = tr$LH,
                                   L_max = 0.25 * trials * tr$L, sizes = sizes)
     }
     tracks[[j]] <<- tr
@@ -143,8 +146,8 @@ collector <- function(n_tracks, d1, d2, horizon, family = "gaussian", trials = 1
     }
     tr <- tracks[[j]]
     tr$k <- tr$k + 1
-    tr$Z[tau + tr$k, ] <- z
-    tr$y[tau + tr$k] <- y
+    Zs[[j]][tau + tr$k, ] <<- z                                   # in place
+    ys[[j]][tau + tr$k] <<- y
     tr$arm[tr$k] <- a
     tr$G <- tr$G + tcrossprod(z)
     tr$b <- tr$b + y * z
@@ -160,8 +163,8 @@ collector <- function(n_tracks, d1, d2, horizon, family = "gaussian", trials = 1
     list(d1 = d1, d2 = d2, p0 = p0, sizes = sizes, family = family, trials = trials, radius = radius, tau = tau,
          horizon = horizon, n_tr = n_tr, score = score, c_lam = c_lam, pilot = pilot,
          Z_ex = Z_ex, y_ex = y_ex, arm_ex = arm_ex,
-         Z = lapply(tracks, function(tr) tr$Z[tau + seq_len(n_tr), , drop = FALSE]),
-         y = lapply(tracks, function(tr) tr$y[tau + seq_len(n_tr)]),
+         Z = lapply(Zs, function(Z) Z[tau + seq_len(n_tr), , drop = FALSE]),
+         y = lapply(ys, function(y) y[tau + seq_len(n_tr)]),
          arm = lapply(tracks, function(tr) tr$arm),
          cv = if (cv) lapply(tracks, function(tr) tr$cv) else NULL)
   }

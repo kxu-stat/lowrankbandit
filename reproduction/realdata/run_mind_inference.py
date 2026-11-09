@@ -2,7 +2,8 @@
 """Run one slice of the MIND inference study.  One task = one stream of one world: one collection to the world's
 largest n (Step 1 of Algorithm 2; 80,000 rounds in both worlds), then Steps
 2-4 at every n of the world's grid -- the same collection stopped at n -- for every choice of n0 and every target of the
-setup file, written as one JSON cell.  A task whose cell exists is skipped.
+setup file, written as one gzip-compressed JSON cell, cells/KEY.json.gz.  A task whose cell exists is skipped (an
+uncompressed cell, KEY.json, stops the task: compress it with `gzip cells/*.json`).
 
     python3 run_mind_inference.py PHASE --setup SETUP_NPZ --chunk k --chunks N [--out DIR]
 
@@ -35,10 +36,10 @@ Step 2 does not involve the loading, so it runs once per n and distinct n0 (algo
 run for the 32 loadings together (algorithms.calibrate_loadings).  Every row also carries the collection's cumulative
 expected regret at n (algorithms.collection_regret) and the target's Cramer-Rao standard error for the collected design
 (algorithms.cramer_rao: V_CR, kappa_A, the ratio V_pqv / V_CR and its prediction sqrt(C_cal kappa_A log n_tr /
-kappa_hat)).  Phases: "evaluation" (500 streams per world) and "debug" (two streams
-per world of 4,000 rounds; minutes each; no claim).  The paper's figures are drawn at FIGURE_N, 40,000 in the
-down-sampled world (the main text) and 80,000 in the main world (the appendix), fixed
-before the run; every n is in the tables.
+kappa_hat)).  Phases: "evaluation" (1,000 streams per world) and "debug" (three streams per world of 4,000 rounds;
+minutes each; no claim).  The paper's figures are drawn at FIGURE_N, 40,000 in the down-sampled world (the main text)
+and 80,000 in the main world (the appendix), fixed before the run; every n is in the tables.  A finished cell is
+reused when its stamp matches (setup file, CELL_VERSION and constants).
 
 Besides the cell, each task writes cells/KEY_stream.npz: the displayed pair chosen in every round (an index into the
 prepared file's pair arrays) and its click, in the order of the collection (tau exploration rounds, then the two
@@ -48,7 +49,7 @@ streams without collecting again.  The stream file also holds the seed and the a
 index among the round's K displayed articles), and the cell records the exploration sample's numbers (the information
 rule's kappa0, the exploration clicks, the pilot's rank) and every choice's n0 at every n.
 """
-import argparse, hashlib, json, os, sys, time, traceback
+import argparse, gzip, hashlib, json, os, sys, time, traceback
 for _var in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_var, "1")          # one core per process
 import numpy as np
@@ -67,9 +68,12 @@ GRID = {"down4": (10000, 20000, 30000, 40000, 60000, 80000),          # n, in to
 FIGURE_N = {"down4": 40000, "main": 80000}    # the n of the paper's figures (debug: the largest n)
 ARMS = IS.N0_CHOICES                          # the choices of n0, as in the inference simulations
 PHASES = {                                    # streams per world, first seed, the grid of n per world
-    "evaluation": dict(B={"main": 500, "down4": 500}, seed=44_000_000, grid=GRID),
-    "debug":      dict(B={"main": 2, "down4": 2}, seed=30_000_000, grid={"down4": (2000, 4000), "main": (2000, 4000)}),
+    "evaluation": dict(B={"main": 1000, "down4": 1000}, seed=44_000_000, grid=GRID),
+    "debug":      dict(B={"main": 3, "down4": 3}, seed=30_000_000, grid={"down4": (2000, 4000), "main": (2000, 4000)}),
 }
+CELL_VERSION = "2.40"                         # the version of the computation the cells are; it changes only with
+                                              # the computation (code that gives the same numbers up to rounding
+                                              # keeps it), so finished cells stay usable
 
 
 def grid_of(phase, world):
@@ -212,15 +216,17 @@ def sha16(path):
 
 
 def stamp(setup_sha):
-    """What a finished cell must have been made under to be reused (checked here and by collect_mind_inference.py)."""
-    return dict(setup_sha=setup_sha, package=PACKAGE, worlds=WORLDS, c_tau=C_TAU, c_lam=C_LAM, C_ref=IA.C_REF,
+    """What a finished cell must have been made under to be reused (checked here and by collect_mind_inference.py):
+    the setup file, the computation's version (CELL_VERSION) and its constants."""
+    return dict(setup_sha=setup_sha, package=CELL_VERSION, worlds=WORLDS, c_tau=C_TAU, c_lam=C_LAM, C_ref=IA.C_REF,
                 C_cal=IA.C_CAL, c0=IA.C0)
 
 
 def provenance():
+    """Where and under which package the task ran (not part of the stamp)."""
     import platform, scipy
     return dict(python=platform.python_version(), numpy=np.__version__, scipy=scipy.__version__,
-                node=os.uname().nodename)
+                node=os.uname().nodename, package_run=PACKAGE)
 
 
 def main():
@@ -242,11 +248,16 @@ def main():
     print("run_mind_inference: %s, tasks %d -> %s" % (a.phase, len(mine), out), flush=True)
     data = None
     for tk in mine:
-        path = os.path.join(out, "cells", tk["key"] + ".json")
-        done = json.load(open(path)) if os.path.exists(path) else None
+        path = os.path.join(out, "cells", tk["key"] + ".json.gz")
+        if os.path.exists(path[:-3]):               # an uncompressed cell of this key: compress, not recompute
+            raise SystemExit("%s exists: compress the cells first, gzip %s/cells/*.json" % (path[:-3], out))
+        done = None
+        if os.path.exists(path):
+            with gzip.open(path, "rt") as f:
+                done = json.load(f)
         if done is not None and done["status"] == "ok":
             if done.get("stamp") != stamp(setup_sha):
-                raise SystemExit("%s was made under another setup or package version: write to a new --out" % path)
+                raise SystemExit("%s was made under another setup or computation version: write to a new --out" % path)
             print("skip", tk["key"], flush=True)
             continue
         if data is None:
@@ -262,7 +273,7 @@ def main():
             value = dict(status="error", error=traceback.format_exc(), results=[])
         value.update(task=tk, elapsed=round(time.time() - t0, 1), stamp=stamp(setup_sha), **provenance())
         tmp = path + ".partial.%d" % os.getpid()
-        with open(tmp, "w") as f:
+        with gzip.open(tmp, "wt") as f:                       # gzip-compressed: about 0.2 MB instead of 1.3
             json.dump(value, f)
         os.replace(tmp, path)
         print("%s %s (%s)" % (value["status"].upper(), tk["key"],

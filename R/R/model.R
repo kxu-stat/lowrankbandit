@@ -47,8 +47,7 @@ design_rows <- function(arms, context, covariates = NULL, main_effects = FALSE) 
   blocks <- list()
   if (!is.null(covariates)) blocks <- c(blocks, list(matrix(covariates, nrow = K)))
   if (main_effects) blocks <- c(blocks, list(arms, matrix(context, K, length(context), byrow = TRUE)))
-  inter <- t(sapply(seq_len(K), function(a) kronecker(context, arms[a, ])))   # vec(m x') = kronecker(x, m)
-  if (length(context) * ncol(arms) == 1) inter <- matrix(inter, ncol = 1)
+  inter <- kronecker(matrix(context, nrow = 1), arms)         # row a: vec(m_a x') = kronecker(x, m_a)
   do.call(cbind, c(blocks, list(inter)))
 }
 

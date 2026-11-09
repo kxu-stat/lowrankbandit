@@ -17,6 +17,7 @@ It prints:
 It judges nothing.  Only the Python standard library is used; a table of a million rows takes about ten seconds.
 """
 import csv
+import gzip
 import math
 import os
 import re
@@ -44,7 +45,7 @@ def node_family(node):
 def scan(path):
     """One merged table, one line at a time: counts, the largest |T| and the collection time of each replicate."""
     out = dict(rows=0, broken=0, capped={}, large={}, top=[], reps={}, cells={})
-    with open(path) as f:
+    with gzip.open(path, "rt") as f:
         header = f.readline().rstrip("\n").split("\t")
         grid = "N" if "n" not in header else "n"                   # I3's grid is N (post-exploration rounds)
         col = {c: header.index(c) for c in ROW_COLUMNS + (grid,) if c in header}
@@ -88,8 +89,8 @@ def check(run):
             print("    made with python %s, numpy %s, scipy %s" % (e["python"], e["numpy"], e["scipy"]))
 
     # 2. the merged tables, one row at a time
-    tables = sorted(f for f in os.listdir(collected) if re.match(r"I\w+_\w+\.tsv$", f))
-    print("\n2. the rows of each table (block_law.tsv)")
+    tables = sorted(f for f in os.listdir(collected) if re.match(r"I\w+_\w+\.tsv\.gz$", f))
+    print("\n2. the rows of each table (block_law.tsv.gz)")
     total = 0.0
     for name in tables:
         z = scan(os.path.join(collected, name))

@@ -1,15 +1,16 @@
 #!/bin/bash
-# DEBUG pass of the MIND inference: two streams in each of the two worlds, 4,000 rounds, Algorithm 2
-# at n = 2,000 and 4,000 for every choice of n0 (displayed: the design-stage split, cap 3/4) and the 32 targets; each
-# stream's seed, arms played and clicks recorded; about two minutes per task; no claim.
+# DEBUG pass of the MIND inference: three streams in each of the two worlds, 4,000 rounds, Algorithm 2 at n = 2,000 and
+# 4,000 for every choice of n0 (displayed: the design-stage split, cap 3/4) and the 32 targets; each stream's seed, arms
+# played and clicks recorded; about two minutes per task; no claim.  Six tasks: stream b of main and of down4 in turn
+# (b = 1-3).
 # Then:  python3 collect_mind_inference.py debug --setup data/mind_setup_D16.npz
 #$ -pe smp 1
 #$ -q long
 #$ -N debug_mind_inf
-#$ -t 1-4
+#$ -t 1-6
 #$ -tc 110
 #$ -r n
 
 module load python/3.12.15
 cd $SGE_O_WORKDIR
-python3 run_mind_inference.py debug --setup data/mind_setup_D16.npz --chunk $SGE_TASK_ID --chunks 4
+python3 run_mind_inference.py debug --setup data/mind_setup_D16.npz --chunk $SGE_TASK_ID --chunks 6

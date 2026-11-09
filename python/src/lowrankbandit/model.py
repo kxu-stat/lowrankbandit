@@ -63,7 +63,7 @@ def design_rows(arms, context, covariates=None, main_effects=False):
     if main_effects:
         blocks.append(arms)
         blocks.append(np.tile(context, (K, 1)))
-    blocks.append(np.array([np.kron(context, m) for m in arms]))      # vec(m x') = kron(x, m)
+    blocks.append(np.kron(context, arms))                         # row a: vec(m_a x') = kron(x, m_a)
     return np.hstack(blocks)
 
 

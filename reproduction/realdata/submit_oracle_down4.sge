@@ -1,0 +1,16 @@
+#!/bin/bash
+# Oracle check of the MIND inference, down-sampled world at its figure n (40,000).  On the stored streams (1,000): the
+# calibration martingale of every target with the true parameter and tangent frame (exact mean 0), and the
+# control-variate estimates of mean T; kappa = the world's mean kappa_hat at the largest n (summary.tsv).  Run after
+# the collect (submit_collect_mind_inference.sge), never before: it reads collected/down4/.  About 3-10 s per stream:
+# under 3 hours.  Writes mind_inference_evaluation/collected/down4/oracle_n40000.tsv and oracle_n40000_cv.tsv; prints
+# one line "oracle martingale of 1000 streams of down4 at n = 40000 ...".
+# Submit (from realdata/):  qsub submit_oracle_down4.sge
+#$ -pe smp 1
+#$ -q long
+#$ -N oracle_down4
+#$ -r n
+
+module load python/3.12.15
+cd $SGE_O_WORKDIR
+python3 oracle_mind_inference.py evaluation --setup data/mind_setup_D16.npz --world down4

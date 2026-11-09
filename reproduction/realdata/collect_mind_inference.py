@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Collect the MIND inference study (run_mind_inference.py), by hand after the
+"""Collect the MIND inference study (run_mind_inference.py; the cells DIR/cells/KEY.json.gz), by hand after the
 array:
 
     python3 collect_mind_inference.py PHASE --setup SETUP_NPZ [--dir DIR] [--min-B 50] [--incomplete]
@@ -17,14 +17,16 @@ The reported n of a world and a choice of n0 (a rule fixed before the run): the 
 on -- at n and at every larger n -- each kind of target (or, orx, ort, lvl) has, averaged over its 8 categories, an
 absolute deviation of mean T from 0, of sd T from 1 and of the oracle coverage from 0.95 within 2 Monte-Carlo
 standard errors of one target of B streams: 2 / sqrt(B), 2 / sqrt(2 (B - 1)) and 2 sqrt(0.95 x 0.05 / B), that is
-0.089, 0.063 and 0.019 at B = 500.  If the largest n does not pass, the rule is not met and the largest n is reported
-as such.
+0.063, 0.045 and 0.014 at B = 1,000.  If the largest n does not pass, the rule is not met and the largest n is reported
+as such.  Beside the rule, not replacing it: the tolerance |mean T| < 0.1 -- at every n, the displayed category's four
+mean T and the targets with |mean T| >= 0.1, under the choice ARM.
 
 Writes, under DIR/collected/:
   status.tsv                   every planned stream of both worlds: ok, error, stale (made under another setup or
-                               package version), missing
+                               computation version, run_mind_inference.stamp), missing
   reported_n.md                the reported n of every world and choice of n0; for the choice ARM, the three
-                               averaged deviations of every kind of target at every n
+                               averaged deviations of every kind of target at every n, and the tolerance
+                               |mean T| < 0.1
   reported_n.pdf/.png          the same deviations of the choice ARM against n, both worlds, with the rule's bounds
 and under DIR/collected/WORLD/, for each world:
   rows.tsv.gz                  every stream, n, choice of n0 and target, as the array wrote it
@@ -66,7 +68,7 @@ and under DIR/collected/WORLD/, for each world:
                                a QQ plot of T above its histogram, one column per kind
 Each world has its own grid (run_mind_inference.GRID; the same in both worlds).
 """
-import argparse, csv, gzip, json, os, sys
+import argparse, csv, glob, gzip, json, os, sys
 for _var in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_var, "1")          # one core per process
 import numpy as np
@@ -88,13 +90,14 @@ def status_of(phase, out, setup_sha):
     """The status of every planned stream of both worlds: ok, error, stale or missing."""
     status = []
     for tk in RMI.tasks(phase):
-        path = os.path.join(out, "cells", tk["key"] + ".json")
+        path = os.path.join(out, "cells", tk["key"] + ".json.gz")
         if not os.path.exists(path):
             status.append(dict(key=tk["key"], status="missing", elapsed="", error=""))
             continue
-        z = json.load(open(path))
+        with gzip.open(path, "rt") as f:
+            z = json.load(f)
         if z["status"] == "ok" and z.get("stamp") != RMI.stamp(setup_sha):
-            z["status"], z["error"] = "stale", "made under another setup or package version"
+            z["status"], z["error"] = "stale", "made under another setup or computation version"
         status.append(dict(key=tk["key"], status=z["status"], elapsed=z["elapsed"],
                            error=z["error"].strip().split("\n")[-1] if z["error"] else ""))
     return status
@@ -106,10 +109,11 @@ def rows_of(phase, out, setup_sha, world):
     (the exploration sample's numbers, the CV choices and the information rule's n0 at every n)."""
     rows, times, streams = [], [], []
     for tk in RMI.tasks(phase):
-        path = os.path.join(out, "cells", tk["key"] + ".json")
+        path = os.path.join(out, "cells", tk["key"] + ".json.gz")
         if tk["world"] != world or not os.path.exists(path):
             continue
-        z = json.load(open(path))
+        with gzip.open(path, "rt") as f:
+            z = json.load(f)
         if z["status"] != "ok" or z.get("stamp") != RMI.stamp(setup_sha):
             continue
         rows += [dict(r, world=world, rep=tk["replication"], seed=tk["seed"], col_caps=z["solver"]["caps"])
@@ -253,6 +257,7 @@ def paper_figure(groups, arm, n, category, out):
 
 # ---------------------------------------------------------------- the reported n
 DEVIATIONS = ("dev_mean", "dev_sd", "dev_cover")                  # the rule's three statistics
+TOLERANCE = 0.1                     # the tolerance for |mean T| reported beside the rule
 DEV_TITLE = {"dev_mean": r"$|$mean $T|$", "dev_sd": r"$|$sd $T - 1|$", "dev_cover": r"$|$coverage $- 0.95|$"}
 
 
@@ -457,12 +462,14 @@ def main():
     bad = [s for s in status if s["status"] != "ok"]
     print("%s: %d streams planned, %d ok%s" % (a.phase, len(status), len(status) - len(bad),
           "; not ok: " + ", ".join("%s (%s)" % (s["key"], s["status"]) for s in bad[:5]) if bad else ""))
+    if glob.glob(os.path.join(out, "cells", "*.json")):
+        print("some cells are not compressed: gzip %s/cells/*.json, then collect again" % out)
     if (bad and not a.incomplete) or len(bad) == len(status):
         sys.exit("incomplete: nothing else written (--incomplete collects the ok streams)")
     setup = dict(np.load(a.setup))
     names = [str(s) for s in setup["target_names"]]
     choices = [c for c, _ in RMI.ARMS]
-    avgs, rep, B_world, grids = {}, {}, {}, {}
+    avgs, rep, B_world, grids, mean_T = {}, {}, {}, {}, {}
     for world in RMI.WORLDS:
         grid = grids[world] = list(RMI.grid_of(a.phase, world))
         FI.TICKS = tuple(grid)
@@ -478,6 +485,8 @@ def main():
         avgs[world] = {c: {n: kind_averages(summ, names, c, n) for n in grid} for c in choices}
         rep[world] = {c: reported_n(avgs[world][c], grid) for c in choices}
         B_world[world] = min(v["B"] for v in avgs[world][a.arm][grid[-1]].values())
+        mean_T[world] = {n: {name: next(s["mean_T"] for s in summ[name, a.arm] if s["n"] == n) for name in names}
+                         for n in grid}
         decomposition(summ, names, RMI.figure_n(a.phase, world), a.arm, os.path.join(col, world))
     # ---- the reported n, both worlds
     B = min(B_world.values())
@@ -507,6 +516,21 @@ def main():
             md.append("| %d | %s | %s |" % (n, " | ".join("%.3f, %.3f, %.3f" % (v[k]["dev_mean"], v[k]["dev_sd"],
                                                                               v[k]["dev_cover"]) for k in KINDS),
                                             "yes" if passes(v) else "no"))
+        md.append("")
+    md += ["## The tolerance |mean T| < %.1f, %s" % (
+               TOLERANCE, CI.LABEL[a.arm]), "",
+           "Reported beside the rule above, which it does not replace: at each n, the four %s targets' mean T and the "
+           "targets (of %d) with |mean T| >= %.1f." % (a.category, len(names), TOLERANCE), ""]
+    for world in mean_T:
+        own = ["%s_%s" % (kind, a.category) for kind in KINDS]
+        md += ["### %s, B = %d" % (WORLD_LABEL[world], B_world[world]), "",
+               "| n | %s | targets with abs(mean T) >= %.1f |" % (" | ".join(own), TOLERANCE),
+               "|---|" + "---|" * (len(own) + 1)]
+        for n in grids[world]:
+            m = mean_T[world][n]
+            over = ["%s %+.3f" % (name, m[name]) for name in names if abs(m[name]) >= TOLERANCE]
+            md.append("| %d | %s | %d%s |" % (n, " | ".join("%+.3f" % m[name] for name in own), len(over),
+                                             ": " + ", ".join(over) if over else ""))
         md.append("")
     open(os.path.join(col, "reported_n.md"), "w").write("\n".join(md))
     print("\n".join(table))

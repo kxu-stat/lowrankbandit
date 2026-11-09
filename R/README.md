@@ -12,6 +12,9 @@ the same numbers.
 remotes::install_github("kxu-stat/lowrankbandit", subdir = "R")
 ```
 
+The solvers are in C++ (Rcpp, RcppEigen), compiled at installation: installing from GitHub needs Rtools on Windows
+and the Xcode command line tools on macOS.
+
 ## Example
 
 ```r

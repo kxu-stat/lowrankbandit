@@ -4,7 +4,7 @@ Algorithm 2 against the one-step debiasing of the policy's own estimator,
 with and without cross-fitting, on the same collections.
 
     python3 ablation_step3.py RUN_DIR OUT_DIR [--chunk k --chunks m] [--every-n]
-    e.g.  python3 ablation_step3.py inference_results ablation_results/parts --chunk 1 --chunks 20
+    e.g.  python3 ablation_step3.py inference_results ablation_results/appendix --chunk 1 --chunks 20
 
 RUN_DIR is the run's directory (run_inference.py --out).  Its records/*.npz are replayed (replay_inference.replay: the
 same collection, nothing refitted).  For every record of the blocks in PLAN (each in its displayed covariate regime)

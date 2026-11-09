@@ -83,14 +83,17 @@ cv_constant <- function(Z, y, base, start, d1, d2, family, trials, radius = NULL
     Zt <- Z[train, , drop = FALSE]
     yt <- y[train]
     s <- length(yt)
+    G <- crossprod(Zt) / s                                       # the same for every c: computed once per fold
+    b <- as.vector(crossprod(Zt, yt)) / s
+    L <- top_eigenvalue(G)
     x <- start
     for (k in seq_along(CV_GRID)) {
       c <- CV_GRID[k]
       if (family == "gaussian") {
-        x <- fista(crossprod(Zt) / s, as.vector(crossprod(Zt, yt)) / s, c * base(s), d1, d2, x, radius = radius,
-                   sizes = sizes)
+        x <- fista(G, b, c * base(s), d1, d2, x, L = L, radius = radius, sizes = sizes)
       } else {
-        x <- proximal_newton(Zt, yt, c * base(s), d1, d2, x, trials, radius, sizes = sizes)
+        x <- proximal_newton(Zt, yt, c * base(s), d1, d2, x, trials, radius, L_max = 0.25 * trials * L,
+                             sizes = sizes)
       }
       u <- as.vector(Z[test, , drop = FALSE] %*% x)
       if (family == "gaussian") {

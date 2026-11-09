@@ -7,6 +7,9 @@ dist/
 lowrankbandit_*.tar.gz
 .Rhistory
 .DS_Store
+R/src/*.o
+R/src/*.so
+R/src/*.dll
 # what the runs in reproduction/ write
 reproduction/*/regret_*/
 reproduction/*/debug_*/

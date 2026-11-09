@@ -41,8 +41,8 @@ Bandits, with Applications to Advertising and Product Design* by Ke Xu, Yuefeng 
 
     ---
 
-    Six source files per language, one function per step of the algorithms. numpy and scipy in Python; base R
-    only.
+    Six source files per language, one function per step of the algorithms. numpy and scipy in Python; in R,
+    Rcpp and RcppEigen for the solvers, which are in C++.
 
 </div>
 

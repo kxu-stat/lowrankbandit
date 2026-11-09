@@ -9,5 +9,5 @@
 cd $SGE_O_WORKDIR
 echo "Array finished at $(date)."
 echo "part files per directory:"
-find . -path '*/parts/*.tsv' | cut -d/ -f2 | sort | uniq -c
-echo "Next: python3 collect_inference.py [--debug]"
+find . -path '*/parts/*.tsv*' | cut -d/ -f2 | sort | uniq -c
+echo "Next: qsub submit_collect_inference.sge (the debug plan: python3 collect_inference.py --debug)"

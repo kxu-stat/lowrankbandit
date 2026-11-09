@@ -4,7 +4,7 @@
     python3 figure_ablation.py OUT_DIR [--run RUN_DIR] [--vcr VCR_TSV] [--show BLOCK:TARGET:N,...] [--blocks I3,I1]
                                [--target dense] [--name N]
     e.g.  python3 figure_ablation.py ablation_results/tie --blocks "" --name ablation_tie         (the main text)
-          python3 figure_ablation.py ablation_results/parts --run inference_results --name ablation_appendix \
+          python3 figure_ablation.py ablation_results/appendix --run inference_results --name ablation_appendix \
               --show I2l:dense:40000,I2l:entry_max:40000,I2l:rank1:40000,I2l:entry_min:40000,I2l:dense:10000,I1:dense:10000,I1d32:dense:10000
 
 Reads OUT_DIR/part_*.tsv (tie_ablation.py or ablation_step3.py) and prints the package versions that wrote them.
@@ -32,7 +32,7 @@ error enters the figures (the one-step arms have no oracle standard error).  Wri
 Color: the weights (ink: the predictable recursion; orange: one step); fill or line: cross-fitting (filled and solid:
 yes; open and dashed: no).  numpy, scipy and matplotlib only (the package's requirements).
 """
-import argparse, csv, glob, os
+import argparse, csv, glob, gzip, os
 import numpy as np
 from scipy import stats
 import matplotlib
@@ -95,15 +95,16 @@ def check_run(rows, run):
                 if r["block"] == block and r["arm"] in CHECKS}
         wanted += len(ours)
         key_n = "N" if block == "I3" else "n"
-        for w in csv.DictReader(open(os.path.join(run, "collected", "%s_%s.tsv" % (block, regime))), delimiter="\t"):
-            key = (w["arm"], int(w["rep"]), int(float(w[key_n])), w["target"])
-            if key not in ours:
-                continue
-            matched += 1
-            if abs(ours[key] - float(w["mu"])) > 1e-6 * max(1.0, abs(float(w["mu"]))):
-                bad.append("%s %s rep %d n %d %s: ours %.12g, run %s" % ((block,) + key + (ours[key], w["mu"])))
-            if w["arm"] == "design_75":
-                acc.setdefault((block, key[2], key[3]), []).append((float(w["V_CR"]), float(w["V_pqv"])))
+        with gzip.open(os.path.join(run, "collected", "%s_%s.tsv.gz" % (block, regime)), "rt", newline="") as f:
+            for w in csv.DictReader(f, delimiter="\t"):
+                key = (w["arm"], int(w["rep"]), int(float(w[key_n])), w["target"])
+                if key not in ours:
+                    continue
+                matched += 1
+                if abs(ours[key] - float(w["mu"])) > 1e-6 * max(1.0, abs(float(w["mu"]))):
+                    bad.append("%s %s rep %d n %d %s: ours %.12g, run %s" % ((block,) + key + (ours[key], w["mu"])))
+                if w["arm"] == "design_75":
+                    acc.setdefault((block, key[2], key[3]), []).append((float(w["V_CR"]), float(w["V_pqv"])))
     print("ours and no_refit against the run's rows: %d of %d matched, %d differ" % (matched, wanted, len(bad)))
     if bad or matched != wanted:
         raise SystemExit("CHECK FAILED: " + "; ".join(bad[:5]))
